@@ -1,0 +1,138 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  DAV1D_VERSION: "1.5.4"
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    container: ubuntu:22.04
+    steps:
+      - name: System packages
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential ca-certificates curl git ninja-build nasm pkg-config python3-pip
+          pip3 install meson
+
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Cache dav1d
+        id: dav1d
+        uses: actions/cache@v4
+        with:
+          path: /opt/dav1d
+          key: dav1d-linux-${{ env.DAV1D_VERSION }}
+
+      - name: Build dav1d
+        if: steps.dav1d.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch "$DAV1D_VERSION" https://github.com/videolan/dav1d dav1d-src
+          meson setup dav1d-build dav1d-src --prefix=/opt/dav1d --libdir=lib -Dbuildtype=release -Ddefault_library=static -Denable_tools=false -Denable_tests=false
+          ninja -C dav1d-build install
+
+      - name: Build komaru
+        env:
+          PKG_CONFIG_PATH: /opt/dav1d/lib/pkgconfig
+          SYSTEM_DEPS_DAV1D_LINK: static
+        run: cargo build --release --locked
+
+      - name: Check linkage
+        run: |
+          ! ldd target/release/komaru | grep -i dav1d
+          readelf -d target/release/komaru | grep NEEDED
+          objdump -T target/release/komaru | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -1
+
+      - run: cp target/release/komaru komaru-x86_64-linux
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: komaru-x86_64-linux
+          path: komaru-x86_64-linux
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Tools
+        shell: pwsh
+        run: |
+          choco install nasm -y --no-progress
+          "C:\Program Files\NASM" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          pip install meson ninja
+
+      - name: Cache dav1d
+        id: dav1d
+        uses: actions/cache@v4
+        with:
+          path: C:\dav1d
+          key: dav1d-windows-${{ env.DAV1D_VERSION }}
+
+      - name: Build dav1d
+        if: steps.dav1d.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch $env:DAV1D_VERSION https://github.com/videolan/dav1d dav1d-src
+          meson setup dav1d-build dav1d-src --prefix=C:\dav1d --libdir=lib -Dbuildtype=release -Db_vscrt=mt -Ddefault_library=static -Denable_tools=false -Denable_tests=false
+          ninja -C dav1d-build install
+
+      - name: Build komaru
+        shell: pwsh
+        env:
+          SYSTEM_DEPS_DAV1D_NO_PKG_CONFIG: "1"
+          SYSTEM_DEPS_DAV1D_SEARCH_NATIVE: C:\dav1d\lib
+          SYSTEM_DEPS_DAV1D_LIB: dav1d
+          SYSTEM_DEPS_DAV1D_LINK: static
+        run: cargo build --release --locked --target x86_64-pc-windows-msvc
+
+      - run: copy target\x86_64-pc-windows-msvc\release\komaru.exe komaru-x86_64-windows.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: komaru-x86_64-windows
+          path: komaru-x86_64-windows.exe
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        working-directory: dist
+        run: |
+          sha256sum komaru-* > SHA256SUMS
+          case "$GITHUB_REF_NAME" in
+            *-*) channel=--prerelease ;;
+            *) channel= ;;
+          esac
+          gh release create "$GITHUB_REF_NAME" $channel --generate-notes komaru-* SHA256SUMS
