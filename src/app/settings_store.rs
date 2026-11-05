@@ -1,7 +1,7 @@
 use toml::{Table, Value};
 
 use crate::app::settings::Category;
-use crate::app::settings_entries::{Control, ENTRIES};
+use crate::app::settings_entries::{Control, ENTRIES, Variant};
 use crate::core::config::Config;
 use crate::core::rgba::Rgba;
 use crate::error::ConfigError;
@@ -43,12 +43,20 @@ pub fn store(config: &mut Config, controls: &[Control]) -> Result<(), ConfigErro
     config.save()
 }
 
+fn is_pair(options: &[Variant]) -> bool {
+    options.len() == 2
+}
+
 fn read(template: &Control, value: &Value) -> Option<Control> {
     match template {
         Control::Toggle(_) => value.as_bool().map(Control::Toggle),
+        Control::Choice { options, .. } if is_pair(options) => Some(Control::Choice {
+            options,
+            selected: usize::from(value.as_bool()?),
+        }),
         Control::Choice { options, .. } => {
-            let text = value.as_str()?;
-            let selected = options.iter().position(|option| *option == text)?;
+            let token = value.as_str()?;
+            let selected = options.iter().position(|variant| variant.token == token)?;
             Some(Control::Choice { options, selected })
         }
         Control::Number {
@@ -71,10 +79,11 @@ fn read(template: &Control, value: &Value) -> Option<Control> {
 fn write(control: &Control) -> Value {
     match control {
         Control::Toggle(on) => Value::Boolean(*on),
+        Control::Choice { options, selected } if is_pair(options) => Value::Boolean(*selected == 1),
         Control::Choice { options, selected } => Value::String(
             options
                 .get(*selected)
-                .copied()
+                .map(|variant| variant.token)
                 .unwrap_or_default()
                 .to_owned(),
         ),
@@ -92,6 +101,39 @@ mod tests {
     fn every_control_survives_a_write_and_read() {
         for control in defaults() {
             assert_eq!(read(&control, &write(&control)), Some(control));
+        }
+    }
+
+    #[test]
+    fn tokens_are_short_lowercase_and_unique() {
+        for entry in ENTRIES {
+            let Control::Choice { options, .. } = &entry.control else {
+                continue;
+            };
+            for (position, variant) in options.iter().enumerate() {
+                let valid = |character: char| {
+                    character.is_ascii_lowercase() || character.is_ascii_digit() || character == '_'
+                };
+                assert!(variant.token.chars().all(valid), "{}", variant.token);
+                assert!(
+                    options[..position]
+                        .iter()
+                        .all(|other| other.token != variant.token),
+                    "{}",
+                    variant.token
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn two_option_choices_are_stored_as_bools() {
+        for entry in ENTRIES {
+            let Control::Choice { options, .. } = &entry.control else {
+                continue;
+            };
+            let stored = write(&entry.control);
+            assert_eq!(stored.is_bool(), options.len() == 2, "{:?}", entry.setting);
         }
     }
 

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Komaru
+GenericName=Image Viewer
+Comment=Fast reference image viewer
+Exec=komaru %f
+Icon=komaru
+Terminal=false
+Categories=Graphics;Viewer;
+MimeType=image/jpeg;image/png;image/webp;image/gif;image/bmp;image/avif;
+StartupWMClass=komaru

@@ -42,7 +42,7 @@ mod theme;
 mod tiles;
 mod toolbar;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::mpsc::Sender;
 use std::time::Instant;
@@ -147,7 +147,7 @@ pub struct KomaruApp {
 }
 
 impl KomaruApp {
-    pub fn new(creation_context: &eframe::CreationContext<'_>) -> Self {
+    pub fn new(creation_context: &eframe::CreationContext<'_>, launch_files: Vec<PathBuf>) -> Self {
         let context = creation_context.egui_ctx.clone();
         context.options_mut(|options| options.zoom_with_keyboard = false);
         let (config, config_error) = Config::load();
@@ -167,8 +167,14 @@ impl KomaruApp {
             .or_else(|| shortcut_store::summary(&problems))
             .or(setting_problem)
             .map_or(Notice::None, Notice::Failed);
+        let loader = Loader::spawn(move || context.request_repaint());
+        if !launch_files.is_empty() {
+            loader
+                .requester()
+                .ingest(vec![Payload::Files(launch_files)]);
+        }
         Self {
-            loader: Loader::spawn(move || context.request_repaint()),
+            loader,
             shown: None,
             notice,
             canvas: Canvas::default(),

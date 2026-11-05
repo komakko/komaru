@@ -7,7 +7,7 @@ use crate::app::color_picker::paint::color32;
 use crate::app::color_picker::{self, ColorPicker, Parts};
 use crate::app::popover;
 use crate::app::settings::Category;
-use crate::app::settings_entries::{Control, ENTRIES, Entry};
+use crate::app::settings_entries::{Control, ENTRIES, Entry, Variant};
 use crate::app::theme;
 use crate::core::rgba::Rgba;
 
@@ -142,15 +142,15 @@ fn show_control(ui: &mut Ui, index: usize, control: &mut Control, editor: &mut C
     }
 }
 
-fn choice(ui: &mut Ui, index: usize, options: &[&'static str], selected: &mut usize) {
-    let current = options.get(*selected).copied().unwrap_or_default();
+fn choice(ui: &mut Ui, index: usize, options: &[Variant], selected: &mut usize) {
+    let current = options.get(*selected).map_or("", |variant| variant.label);
     ComboBox::from_id_salt(("setting", index))
         .width(CONTROL_WIDTH)
         .selected_text(current)
         .popup_style(theme::field_style.into())
         .show_ui(ui, |ui| {
             for (position, option) in options.iter().enumerate() {
-                ui.selectable_value(selected, position, *option);
+                ui.selectable_value(selected, position, option.label);
             }
         });
 }

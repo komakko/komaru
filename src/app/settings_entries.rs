@@ -7,11 +7,17 @@ use crate::core::rgba::Rgba;
 const BYTES_PER_MIB: u64 = 1024 * 1024;
 const MAX_LIMIT_MIB: u32 = 65_536;
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Variant {
+    pub token: &'static str,
+    pub label: &'static str,
+}
+
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Control {
     Toggle(bool),
     Choice {
-        options: &'static [&'static str],
+        options: &'static [Variant],
         selected: usize,
     },
     Number {
@@ -60,15 +66,15 @@ impl Setting {
             Self::Theme => "theme",
             Self::RefitAfterTurn => "refit_after_turn",
             Self::ResizeFilter => "resize_filter",
-            Self::ResizeUnit => "resize_unit",
+            Self::ResizeUnit => "resize_percent",
             Self::ConfirmDiscard => "confirm_discard",
             Self::FlattenColor => "flatten_color",
             Self::LossyQuality => "lossy_quality",
-            Self::WebpMode => "webp_mode",
+            Self::WebpMode => "webp_lossy",
             Self::PngCompression => "png_compression",
             Self::LossySources => "lossy_sources",
-            Self::PickMode => "pick_mode",
-            Self::PickCursor => "pick_cursor",
+            Self::PickMode => "pick_one_shot",
+            Self::PickCursor => "pick_loupe",
             Self::DisableHashsign => "disable_hashsign",
             Self::EnforceLimits => "enforce_limits",
             Self::MaxEncoded => "max_encoded_mib",
@@ -76,7 +82,7 @@ impl Setting {
             Self::CheckForUpdates => "check_for_updates",
             Self::CheckFrequency => "check_frequency",
             Self::InstallAutomatically => "install_automatically",
-            Self::UpdateChannel => "update_channel",
+            Self::UpdateChannel => "update_beta",
             Self::DisableUpdates => "disable_updates",
         }
     }
@@ -90,7 +96,11 @@ pub struct Entry {
     pub control: Control,
 }
 
-const fn choice(options: &'static [&'static str]) -> Control {
+const fn variant(token: &'static str, label: &'static str) -> Variant {
+    Variant { token, label }
+}
+
+const fn choice(options: &'static [Variant]) -> Control {
     Control::Choice {
         options,
         selected: 0,
@@ -131,7 +141,7 @@ pub static ENTRIES: &[Entry] = &[
         category: Category::General,
         label: "Language",
         hint: "Language of menus, labels and messages",
-        control: choice(&["English"]),
+        control: choice(&[variant("en", "English")]),
     },
     Entry {
         setting: Setting::RememberRecent,
@@ -152,7 +162,12 @@ pub static ENTRIES: &[Entry] = &[
         category: Category::Appearance,
         label: "Theme",
         hint: "Colors of the window",
-        control: choice(&["Slate", "Midnight", "Light", "Follow system"]),
+        control: choice(&[
+            variant("slate", "Slate"),
+            variant("midnight", "Midnight"),
+            variant("light", "Light"),
+            variant("system", "Follow system"),
+        ]),
     },
     Entry {
         setting: Setting::RefitAfterTurn,
@@ -167,12 +182,12 @@ pub static ENTRIES: &[Entry] = &[
         label: "Resize filter",
         hint: "Resampling method used by Resize",
         control: choice(&[
-            "Lanczos3",
-            "Catmull-Rom",
-            "Mitchell",
-            "Hamming",
-            "Bilinear",
-            "Box",
+            variant("lanczos3", "Lanczos3"),
+            variant("catmull_rom", "Catmull-Rom"),
+            variant("mitchell", "Mitchell"),
+            variant("hamming", "Hamming"),
+            variant("bilinear", "Bilinear"),
+            variant("box", "Box"),
         ]),
     },
     Entry {
@@ -180,7 +195,7 @@ pub static ENTRIES: &[Entry] = &[
         category: Category::Editing,
         label: "Resize unit",
         hint: "Unit of the width and height fields in Resize",
-        control: choice(&["Pixels", "Percent"]),
+        control: choice(&[variant("pixels", "Pixels"), variant("percent", "Percent")]),
     },
     Entry {
         setting: Setting::ConfirmDiscard,
@@ -208,7 +223,7 @@ pub static ENTRIES: &[Entry] = &[
         category: Category::Saving,
         label: "WebP mode",
         hint: "Lossless keeps every pixel, lossy is smaller",
-        control: choice(&["Lossless", "Lossy"]),
+        control: choice(&[variant("lossless", "Lossless"), variant("lossy", "Lossy")]),
     },
     Entry {
         setting: Setting::PngCompression,
@@ -216,7 +231,11 @@ pub static ENTRIES: &[Entry] = &[
         label: "PNG compression",
         hint: "Deflate effort when saving PNG, higher is smaller but slower",
         control: Control::Choice {
-            options: &["Fast", "Default", "Best"],
+            options: &[
+                variant("fast", "Fast"),
+                variant("default", "Default"),
+                variant("best", "Best"),
+            ],
             selected: 1,
         },
     },
@@ -226,9 +245,9 @@ pub static ENTRIES: &[Entry] = &[
         label: "Lossy sources",
         hint: "How Copy and Save As treat JPEG and WebP images, which grow a lot as PNG",
         control: choice(&[
-            "Convert to PNG",
-            "Keep source format",
-            "Warn about size first",
+            variant("png", "Convert to PNG"),
+            variant("source", "Keep source format"),
+            variant("warn", "Warn about size first"),
         ]),
     },
     Entry {
@@ -236,14 +255,17 @@ pub static ENTRIES: &[Entry] = &[
         category: Category::ColorPicker,
         label: "Pick mode",
         hint: "Sticky keeps the tool armed after a click, one-shot disarms it",
-        control: choice(&["Sticky", "One-shot"]),
+        control: choice(&[variant("sticky", "Sticky"), variant("one_shot", "One-shot")]),
     },
     Entry {
         setting: Setting::PickCursor,
         category: Category::ColorPicker,
         label: "Cursor",
         hint: "Cursor shown while picking",
-        control: choice(&["Color ring", "Magnifier loupe"]),
+        control: choice(&[
+            variant("ring", "Color ring"),
+            variant("loupe", "Magnifier loupe"),
+        ]),
     },
     Entry {
         setting: Setting::DisableHashsign,
@@ -295,7 +317,11 @@ pub static ENTRIES: &[Entry] = &[
         category: Category::Updates,
         label: "Check frequency",
         hint: "How often the background check runs",
-        control: choice(&["On startup", "Daily", "Weekly"]),
+        control: choice(&[
+            variant("startup", "On startup"),
+            variant("daily", "Daily"),
+            variant("weekly", "Weekly"),
+        ]),
     },
     Entry {
         setting: Setting::InstallAutomatically,
@@ -309,7 +335,7 @@ pub static ENTRIES: &[Entry] = &[
         category: Category::Updates,
         label: "Update channel",
         hint: "Stable releases only, or early builds too",
-        control: choice(&["Stable", "Beta"]),
+        control: choice(&[variant("stable", "Stable"), variant("beta", "Beta")]),
     },
     Entry {
         setting: Setting::DisableUpdates,

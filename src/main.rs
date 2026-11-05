@@ -1,7 +1,10 @@
+use std::path::PathBuf;
+
 use eframe::egui::ViewportBuilder;
 use komaru::{app, identity, platform};
 
 fn main() -> eframe::Result {
+    let launch_files: Vec<PathBuf> = std::env::args_os().skip(1).map(PathBuf::from).collect();
     let mut viewport = ViewportBuilder::default()
         .with_title(identity::DISPLAY_NAME)
         .with_app_id(identity::NAME)
@@ -23,6 +26,11 @@ fn main() -> eframe::Result {
     eframe::run_native(
         identity::DISPLAY_NAME,
         options,
-        Box::new(|creation_context| Ok(Box::new(app::KomaruApp::new(creation_context)))),
+        Box::new(|creation_context| {
+            Ok(Box::new(app::KomaruApp::new(
+                creation_context,
+                launch_files,
+            )))
+        }),
     )
 }
