@@ -169,3 +169,41 @@ pub enum ConfigError {
     #[error("cannot encode settings: {0}")]
     Encode(#[from] toml::ser::Error),
 }
+
+#[derive(Debug, Error)]
+pub enum UpdateError {
+    #[error("cannot reach the update server: {0}")]
+    Fetch(#[from] FetchError),
+    #[error("the update information is not valid TOML: {}", .0.message())]
+    Manifest(#[from] toml::de::Error),
+    #[error("the update information has no usable version")]
+    NoVersion,
+    #[error("this release has no signed build for this system")]
+    NoBuild,
+    #[error("this build cannot verify updates because it has no signing key")]
+    NoKey,
+    #[error("the update signature is not valid")]
+    BadSignature,
+    #[error("cannot replace {path}: {source}")]
+    Replace {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+}
+
+#[derive(Debug, Error)]
+pub enum InstallError {
+    #[error("{0}")]
+    Unsupported(&'static str),
+    #[error("this system has no home directory")]
+    NoDirectory,
+    #[error("komaru is not installed")]
+    NotInstalled,
+    #[error("cannot write {path}: {source}")]
+    Io {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+}

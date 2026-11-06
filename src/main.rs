@@ -1,10 +1,20 @@
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
 use std::path::PathBuf;
 
 use eframe::egui::ViewportBuilder;
+use komaru::cli::{self, Launch};
 use komaru::{app, identity, platform};
 
 fn main() -> eframe::Result {
-    let launch_files: Vec<PathBuf> = std::env::args_os().skip(1).map(PathBuf::from).collect();
+    match cli::parse(std::env::args_os().skip(1)) {
+        Launch::Viewer(files) => run_viewer(files),
+        Launch::Install => std::process::exit(cli::install()),
+        Launch::Uninstall => std::process::exit(cli::uninstall()),
+    }
+}
+
+fn run_viewer(launch_files: Vec<PathBuf>) -> eframe::Result {
     let mut viewport = ViewportBuilder::default()
         .with_title(identity::DISPLAY_NAME)
         .with_app_id(identity::NAME)

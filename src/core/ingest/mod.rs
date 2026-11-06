@@ -8,7 +8,7 @@ mod relative_url;
 use std::path::PathBuf;
 
 pub use candidates::Candidates;
-pub use fetch::fetch;
+pub use fetch::{fetch, fetch_up_to};
 pub use file::read_file;
 
 pub struct RawPixels {

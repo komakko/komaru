@@ -2,6 +2,7 @@ pub mod clipboard;
 mod display_server;
 mod file_uri;
 mod graphics;
+pub mod install;
 #[cfg(target_os = "macos")]
 mod macos;
 pub mod trace;

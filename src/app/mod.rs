@@ -41,6 +41,7 @@ mod status_bar;
 mod theme;
 mod tiles;
 mod toolbar;
+mod updates;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -89,6 +90,7 @@ use shortcuts::ShortcutBus;
 use status_bar::{ImageStatus, Notice};
 use tiles::TiledLevel;
 use toolbar::ImageTitle;
+use updates::Updater;
 
 const RECENTS_SECTION: &str = "recents";
 
@@ -133,6 +135,7 @@ pub struct KomaruApp {
     pin: PinControl,
     native_drop: NativeDrop,
     settings: Settings,
+    updater: Updater,
     shortcuts: ShortcutBus,
     config: Config,
     jobs: Jobs,
@@ -184,6 +187,7 @@ impl KomaruApp {
             pin: PinControl::detached(),
             native_drop: NativeDrop::default(),
             settings: Settings::new(controls),
+            updater: Updater::new(),
             shortcuts,
             config,
             jobs: Jobs::default(),
@@ -957,6 +961,8 @@ impl eframe::App for KomaruApp {
         let ctx = ui.ctx().clone();
         theme::apply(&ctx, self.prefs.theme);
         self.receive_events(&ctx);
+        self.updater
+            .sync(&ctx, self.prefs.check_updates, self.prefs.update_channel);
         self.advance_animation(&ctx);
         self.guard_close_request(&ctx);
         while let Some(message) = self.jobs.poll() {
@@ -1043,7 +1049,12 @@ impl eframe::App for KomaruApp {
         if self.native_drop.is_hovering(&ctx) {
             drop::paint_hover(&ctx, viewer_area);
         }
-        let changed: Changed = self.settings.show(&ctx, below_toolbar, &mut self.shortcuts);
+        let changed: Changed =
+            self.settings
+                .show(&ctx, below_toolbar, &mut self.shortcuts, &self.updater);
+        if changed.install_update {
+            self.updater.install(&ctx);
+        }
         if changed.shortcuts {
             self.save_shortcuts();
         }

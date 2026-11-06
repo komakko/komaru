@@ -10,11 +10,6 @@ Download the installer (`komaru-x86_64-windows-setup.exe`) from the [latest rele
 
 ### Linux (x86_64):
 
-Install with:
-```sh
-curl -fsSL https://github.com/komakko/komaru/releases/latest/download/install.sh | sh
-```
+Download the binary (`komaru-x86_64-linux`) and install with `./komaru-x86_64-linux --install` or run as-is.
 
-Or use the portable binary (`komaru-x86_64-linux`).
-
-To uninstall, use `sh install.sh --uninstall` (download the script first).
+To uninstall, run `komaru --uninstall`.

@@ -5,6 +5,7 @@ use crate::core::encode::{EncodeOptions, PngLevel, WebpMode};
 use crate::core::limits::Limits;
 use crate::core::resample::Filter;
 use crate::core::rgba::Rgba;
+use crate::core::update::Channel;
 
 const BYTES_PER_MIB: u64 = 1024 * 1024;
 const PNG_LEVELS: [PngLevel; 3] = [PngLevel::Fast, PngLevel::Default, PngLevel::Best];
@@ -17,6 +18,7 @@ const LOSSY_POLICIES: [LossyPolicy; 3] = [
 ];
 const PICK_MODES: [PickMode; 2] = [PickMode::Sticky, PickMode::OneShot];
 const PICK_CURSORS: [PickCursor; 2] = [PickCursor::Ring, PickCursor::Loupe];
+const CHANNELS: [Channel; 2] = [Channel::Stable, Channel::Beta];
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum ResizeUnit {
@@ -46,6 +48,8 @@ pub struct Preferences {
     pub lossy_sources: LossyPolicy,
     pub picker: ToolStyle,
     pub limits: Limits,
+    pub check_updates: bool,
+    pub update_channel: Channel,
 }
 
 impl Preferences {
@@ -77,6 +81,8 @@ impl Preferences {
                 decoded: mebibytes(Setting::MaxDecoded),
             }
             .enforced(reader.toggle(Setting::EnforceLimits)),
+            check_updates: reader.toggle(Setting::CheckForUpdates),
+            update_channel: reader.pick(Setting::UpdateChannel, &CHANNELS),
         }
     }
 }
@@ -141,6 +147,8 @@ mod tests {
         assert_eq!(preferences.lossy_sources, LossyPolicy::ConvertToPng);
         assert!(preferences.remember_recent);
         assert_eq!(preferences.recent_count, 10);
+        assert!(!preferences.check_updates);
+        assert_eq!(preferences.update_channel, Channel::Stable);
     }
 
     #[test]
@@ -154,6 +162,7 @@ mod tests {
             (Setting::LossySources, LOSSY_POLICIES.len()),
             (Setting::PickMode, PICK_MODES.len()),
             (Setting::PickCursor, PICK_CURSORS.len()),
+            (Setting::UpdateChannel, CHANNELS.len()),
         ];
         for (setting, typed) in sizes {
             let entry = ENTRIES.iter().find(|entry| entry.setting == setting);

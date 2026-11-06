@@ -16,3 +16,4 @@ pub mod recents;
 pub mod replay;
 pub mod resample;
 pub mod rgba;
+pub mod update;

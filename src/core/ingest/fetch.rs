@@ -30,19 +30,26 @@ static AGENT: LazyLock<Agent> = LazyLock::new(|| {
 pub fn fetch(
     url: &str,
     is_cancelled: impl Fn() -> bool,
+    on_progress: impl FnMut(u64, Option<u64>),
+) -> Result<Vec<u8>, FetchError> {
+    fetch_up_to(url, limits::encoded(), is_cancelled, on_progress)
+}
+
+pub fn fetch_up_to(
+    url: &str,
+    limit: u64,
+    is_cancelled: impl Fn() -> bool,
     mut on_progress: impl FnMut(u64, Option<u64>),
 ) -> Result<Vec<u8>, FetchError> {
     let mut response = AGENT.get(url).call()?;
     let total = response.body().content_length();
-    if total.is_some_and(|length| length > limits::encoded()) {
-        return Err(FetchError::TooLarge {
-            limit: limits::encoded(),
-        });
+    if total.is_some_and(|length| length > limit) {
+        return Err(FetchError::TooLarge { limit });
     }
     let mut reader = response
         .body_mut()
         .with_config()
-        .limit(limits::encoded().saturating_add(1))
+        .limit(limit.saturating_add(1))
         .reader();
     let mut bytes = Vec::new();
     let mut chunk = vec![0u8; CHUNK_BYTES];
@@ -54,10 +61,8 @@ pub fn fetch(
         if read == 0 {
             return Ok(bytes);
         }
-        if (bytes.len() + read) as u64 > limits::encoded() {
-            return Err(FetchError::TooLarge {
-                limit: limits::encoded(),
-            });
+        if (bytes.len() + read) as u64 > limit {
+            return Err(FetchError::TooLarge { limit });
         }
         bytes.extend_from_slice(&chunk[..read]);
         on_progress(bytes.len() as u64, total);

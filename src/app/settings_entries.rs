@@ -51,10 +51,7 @@ pub enum Setting {
     MaxEncoded,
     MaxDecoded,
     CheckForUpdates,
-    CheckFrequency,
-    InstallAutomatically,
     UpdateChannel,
-    DisableUpdates,
 }
 
 impl Setting {
@@ -80,10 +77,7 @@ impl Setting {
             Self::MaxEncoded => "max_encoded_mib",
             Self::MaxDecoded => "max_decoded_mib",
             Self::CheckForUpdates => "check_for_updates",
-            Self::CheckFrequency => "check_frequency",
-            Self::InstallAutomatically => "install_automatically",
             Self::UpdateChannel => "update_beta",
-            Self::DisableUpdates => "disable_updates",
         }
     }
 }
@@ -309,25 +303,7 @@ pub static ENTRIES: &[Entry] = &[
         setting: Setting::CheckForUpdates,
         category: Category::Updates,
         label: "Check for updates",
-        hint: "Look for a newer version in the background",
-        control: Control::Toggle(true),
-    },
-    Entry {
-        setting: Setting::CheckFrequency,
-        category: Category::Updates,
-        label: "Check frequency",
-        hint: "How often the background check runs",
-        control: choice(&[
-            variant("startup", "On startup"),
-            variant("daily", "Daily"),
-            variant("weekly", "Weekly"),
-        ]),
-    },
-    Entry {
-        setting: Setting::InstallAutomatically,
-        category: Category::Updates,
-        label: "Install updates automatically",
-        hint: "Download and install new versions without asking",
+        hint: "Look for a newer version at startup; off means no network use",
         control: Control::Toggle(false),
     },
     Entry {
@@ -336,12 +312,5 @@ pub static ENTRIES: &[Entry] = &[
         label: "Update channel",
         hint: "Stable releases only, or early builds too",
         control: choice(&[variant("stable", "Stable"), variant("beta", "Beta")]),
-    },
-    Entry {
-        setting: Setting::DisableUpdates,
-        category: Category::Updates,
-        label: "Disable all updates",
-        hint: "Never check, download or install anything",
-        control: Control::Toggle(false),
     },
 ];

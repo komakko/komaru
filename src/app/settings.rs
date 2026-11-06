@@ -10,6 +10,7 @@ use crate::app::settings_page::{self, ColorEditor};
 use crate::app::shortcut_page::ShortcutPage;
 use crate::app::shortcuts::ShortcutBus;
 use crate::app::theme;
+use crate::app::updates::{Status, Updater};
 use crate::identity;
 
 const NAV_WIDTH: f32 = 180.0;
@@ -22,7 +23,6 @@ const CLOSE_REACH: f32 = 6.0;
 const TITLE_SIZE: f32 = 17.0;
 const ROW_SPACING: f32 = 6.0;
 const SECTION_GAP: f32 = 12.0;
-const UPDATES_STUB: &str = "Not implemented yet. Updating arrives with distribution.";
 const RESET_WARNING: &str =
     "Restores every setting on these pages. Keyboard shortcuts have their own reset.";
 
@@ -89,6 +89,7 @@ impl Category {
 pub struct Changed {
     pub shortcuts: bool,
     pub controls: bool,
+    pub install_update: bool,
 }
 
 pub struct Settings {
@@ -135,7 +136,13 @@ impl Settings {
         self.open
     }
 
-    pub fn show(&mut self, ctx: &Context, area: Rect, bus: &mut ShortcutBus) -> Changed {
+    pub fn show(
+        &mut self,
+        ctx: &Context,
+        area: Rect,
+        bus: &mut ShortcutBus,
+        updates: &Updater,
+    ) -> Changed {
         let mut changed = Changed::default();
         if !self.open {
             return changed;
@@ -156,8 +163,11 @@ impl Settings {
                 );
                 let tabs = nav.shrink(NAV_PADDING);
                 self.show_navigation(&mut ui.new_child(UiBuilder::new().max_rect(tabs)));
-                changed =
-                    self.show_content(&mut ui.new_child(UiBuilder::new().max_rect(content)), bus);
+                changed = self.show_content(
+                    &mut ui.new_child(UiBuilder::new().max_rect(content)),
+                    bus,
+                    updates,
+                );
                 if close_button(ui, content) {
                     self.close();
                 }
@@ -189,7 +199,7 @@ impl Settings {
         });
     }
 
-    fn show_content(&mut self, ui: &mut Ui, bus: &mut ShortcutBus) -> Changed {
+    fn show_content(&mut self, ui: &mut Ui, bus: &mut ShortcutBus, updates: &Updater) -> Changed {
         let content = ui.max_rect();
         let padded = content.shrink(CONTENT_PADDING);
         let mut header = ui.new_child(UiBuilder::new().max_rect(padded));
@@ -213,37 +223,34 @@ impl Settings {
         match self.category {
             Category::Shortcuts => Changed {
                 shortcuts: self.shortcuts.show(&mut page, bus),
-                controls: false,
+                ..Changed::default()
             },
             Category::About => {
                 about(&mut page);
                 Changed::default()
             }
-            category => Changed {
-                shortcuts: false,
-                controls: self.controls_page(&mut page, category),
-            },
+            category => self.controls_page(&mut page, category, updates),
         }
     }
 
-    fn controls_page(&mut self, ui: &mut Ui, category: Category) -> bool {
+    fn controls_page(&mut self, ui: &mut Ui, category: Category, updates: &Updater) -> Changed {
         ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 theme::field_style(ui.style_mut());
-                if category == Category::Updates {
-                    dim(ui, UPDATES_STUB);
-                    ui.add_space(SECTION_GAP / 2.0);
-                    return ui
-                        .add_enabled_ui(false, |ui| {
-                            settings_page::rows(ui, category, &mut self.controls, &mut self.colors)
-                        })
-                        .inner;
-                }
-                let mut changed =
-                    settings_page::rows(ui, category, &mut self.controls, &mut self.colors);
-                if category == Category::General {
-                    changed |= self.reset_section(ui);
+                let mut changed = Changed {
+                    controls: settings_page::rows(
+                        ui,
+                        category,
+                        &mut self.controls,
+                        &mut self.colors,
+                    ),
+                    ..Changed::default()
+                };
+                match category {
+                    Category::General => changed.controls |= self.reset_section(ui),
+                    Category::Updates => changed.install_update = updates_section(ui, updates),
+                    _ => {}
                 }
                 changed
             })
@@ -310,4 +317,44 @@ fn about(ui: &mut Ui) {
     );
     dim(ui, "A fast reference image viewer.");
     dim(ui, "GPL 2.0 License");
+}
+
+fn updates_section(ui: &mut Ui, updates: &Updater) -> bool {
+    ui.add_space(SECTION_GAP);
+    match updates.status() {
+        Status::Off => dim(
+            ui,
+            "Update checks are off. Komaru makes no network connections.",
+        ),
+        Status::Checking => dim(ui, "Checking for updates..."),
+        Status::Current => dim(
+            ui,
+            format!(
+                "{} {} is up to date.",
+                identity::DISPLAY_NAME,
+                identity::VERSION
+            ),
+        ),
+        Status::Available(release) => {
+            bright(ui, format!("Version {} is available.", release.version));
+            if updates.installable() {
+                return outlined_button(ui, "Install update").clicked();
+            }
+            dim(
+                ui,
+                "This copy is not installed, so it does not update itself.",
+            );
+            ui.hyperlink_to(
+                "Open the releases page",
+                format!("{}/releases", identity::REPOSITORY_URL),
+            );
+        }
+        Status::Installing(release) => dim(ui, format!("Installing {}...", release.version)),
+        Status::Installed(version) => bright(
+            ui,
+            format!("Updated to {version}. Restart Komaru to use it."),
+        ),
+        Status::Failed(message) => dim(ui, message.clone()),
+    }
+    false
 }
