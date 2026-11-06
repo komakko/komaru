@@ -32,6 +32,10 @@ OutputBaseFilename=komaru-x86_64-windows-setup
 [Files]
 Source: "{#SourceExe}"; DestDir: "{app}"; DestName: "komaru.exe"; Flags: ignoreversion
 
+[UninstallDelete]
+Type: files; Name: "{app}\komaru.old"
+Type: files; Name: "{app}\komaru.new"
+
 [Icons]
 Name: "{autoprograms}\Komaru"; Filename: "{app}\komaru.exe"
 

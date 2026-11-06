@@ -1,5 +1,6 @@
 pub mod clipboard;
 mod display_server;
+pub mod elevate;
 mod file_uri;
 mod graphics;
 pub mod install;

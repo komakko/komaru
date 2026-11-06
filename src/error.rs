@@ -184,12 +184,22 @@ pub enum UpdateError {
     NoKey,
     #[error("the update signature is not valid")]
     BadSignature,
-    #[error(
-        "{path} needs administrator rights to change; run the new installer from the releases page instead"
-    )]
+    #[error("{path} needs administrator rights to change")]
     Protected { path: PathBuf },
+    #[error("administrator permission was not granted")]
+    Declined,
+    #[error("cannot ask for administrator permission: {0}")]
+    Elevate(String),
+    #[error("the update step run as administrator failed (exit code {0})")]
+    Elevated(u32),
     #[error("cannot replace {path}: {source}")]
     Replace {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("cannot access {path}: {source}")]
+    Io {
         path: PathBuf,
         #[source]
         source: std::io::Error,

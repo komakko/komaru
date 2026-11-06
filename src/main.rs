@@ -11,6 +11,9 @@ fn main() -> eframe::Result {
         Launch::Viewer(files) => run_viewer(files),
         Launch::Install => std::process::exit(cli::install()),
         Launch::Uninstall => std::process::exit(cli::uninstall()),
+        Launch::ApplyUpdate { build, signature } => {
+            std::process::exit(cli::apply_update(&build, &signature))
+        }
     }
 }
 

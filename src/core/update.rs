@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{self, AtomicU64};
 
 use minisign_verify::{PublicKey, Signature};
 use toml::Table;
@@ -136,10 +137,96 @@ fn verified(bytes: Vec<u8>, signature: &str, public_key: &str) -> Result<Vec<u8>
     Ok(bytes)
 }
 
-pub fn download(release: &Release) -> Result<Vec<u8>, UpdateError> {
+pub struct Download {
+    bytes: Vec<u8>,
+    signature: String,
+}
+
+impl Download {
+    pub fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+}
+
+pub fn download(release: &Release) -> Result<Download, UpdateError> {
     let build = release.build.as_ref().ok_or(UpdateError::NoBuild)?;
     let bytes = fetch_up_to(&build.url, BUILD_LIMIT, || false, |_, _| {})?;
-    verified(bytes, &build.signature, identity::UPDATE_PUBLIC_KEY)
+    let bytes = verified(bytes, &build.signature, identity::UPDATE_PUBLIC_KEY)?;
+    Ok(Download {
+        bytes,
+        signature: build.signature.clone(),
+    })
+}
+
+fn io_error(path: &Path, source: std::io::Error) -> UpdateError {
+    UpdateError::Io {
+        path: path.to_owned(),
+        source,
+    }
+}
+
+pub fn current_executable() -> Result<PathBuf, UpdateError> {
+    std::env::current_exe().map_err(|source| io_error(Path::new("."), source))
+}
+
+static STAGINGS: AtomicU64 = AtomicU64::new(0);
+
+pub struct Staging {
+    directory: PathBuf,
+}
+
+impl Staging {
+    pub fn create(download: &Download) -> Result<Self, UpdateError> {
+        let directory = std::env::temp_dir().join(format!(
+            "komaru-update-{}-{}",
+            std::process::id(),
+            STAGINGS.fetch_add(1, atomic::Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&directory).map_err(|source| io_error(&directory, source))?;
+        let staging = Self { directory };
+        for (path, contents) in [
+            (staging.build(), download.bytes.as_slice()),
+            (staging.signature(), download.signature.as_bytes()),
+        ] {
+            fs::write(&path, contents).map_err(|source| io_error(&path, source))?;
+        }
+        Ok(staging)
+    }
+
+    pub fn build(&self) -> PathBuf {
+        self.directory.join("build")
+    }
+
+    pub fn signature(&self) -> PathBuf {
+        self.directory.join("build.minisig")
+    }
+}
+
+impl Drop for Staging {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.directory);
+    }
+}
+
+pub fn apply_staged(build: &Path, signature: &Path) -> Result<(), UpdateError> {
+    apply_staged_to(
+        build,
+        signature,
+        &current_executable()?,
+        identity::UPDATE_PUBLIC_KEY,
+    )
+}
+
+fn apply_staged_to(
+    build: &Path,
+    signature: &Path,
+    target: &Path,
+    public_key: &str,
+) -> Result<(), UpdateError> {
+    let bytes = fs::read(build).map_err(|source| io_error(build, source))?;
+    let signature = fs::read_to_string(signature).map_err(|source| io_error(signature, source))?;
+    let bytes = verified(bytes, &signature, public_key)?;
+    replace_executable(target, &bytes)
 }
 
 pub fn replace_executable(target: &Path, bytes: &[u8]) -> Result<(), UpdateError> {
@@ -272,5 +359,52 @@ y/rUw2y8/hOUYjZU71eHp/Wo1KZ40fGy2VJEDl34XMJM+TX48Ss/17u3IvIfbVR1FkZZSNCisQbuQY+b
         assert_eq!(fs::read(&target).unwrap(), b"new");
         assert!(!target.with_extension("new").exists());
         fs::remove_dir_all(&directory).unwrap();
+    }
+
+    fn staged(bytes: &[u8]) -> Staging {
+        Staging::create(&Download {
+            bytes: bytes.to_vec(),
+            signature: SIGNATURE.to_owned(),
+        })
+        .unwrap()
+    }
+
+    fn installed(name: &str, contents: &[u8]) -> PathBuf {
+        let directory =
+            std::env::temp_dir().join(format!("komaru-update-test-{}-{name}", std::process::id()));
+        fs::create_dir_all(&directory).unwrap();
+        let target = directory.join("komaru");
+        fs::write(&target, contents).unwrap();
+        target
+    }
+
+    #[test]
+    fn a_staged_build_is_verified_again_before_it_replaces_the_target() {
+        let target = installed("good", b"old");
+        let build = staged(b"test");
+        apply_staged_to(&build.build(), &build.signature(), &target, KEY).unwrap();
+        assert_eq!(fs::read(&target).unwrap(), b"test");
+        fs::remove_dir_all(target.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn a_tampered_staged_build_leaves_the_target_alone() {
+        let target = installed("tampered", b"old");
+        let build = staged(b"tampered");
+        assert!(matches!(
+            apply_staged_to(&build.build(), &build.signature(), &target, KEY),
+            Err(UpdateError::BadSignature)
+        ));
+        assert_eq!(fs::read(&target).unwrap(), b"old");
+        fs::remove_dir_all(target.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn staging_cleans_up_after_itself() {
+        let build = staged(b"test");
+        let directory = build.build().parent().unwrap().to_owned();
+        assert!(directory.is_dir());
+        drop(build);
+        assert!(!directory.exists());
     }
 }

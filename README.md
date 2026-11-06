@@ -10,6 +10,6 @@ Download the installer (`komaru-x86_64-windows-setup.exe`) from the [latest rele
 
 ### Linux (x86_64):
 
-Download the binary (`komaru-x86_64-linux`) and install with `./komaru-x86_64-linux --install` or run as-is.
+Download the binary (`komaru-x86_64-linux`), make it executable with `chmod +x komaru-x86_64-linux`, then install with `./komaru-x86_64-linux --install` or run as-is.
 
 To uninstall, run `komaru --uninstall`.

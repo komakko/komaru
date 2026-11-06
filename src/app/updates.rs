@@ -5,7 +5,7 @@ use eframe::egui::Context;
 
 use crate::core::update::{self, Channel, Release};
 use crate::error::UpdateError;
-use crate::platform::install;
+use crate::platform::{elevate, install};
 
 pub enum Status {
     Off,
@@ -90,11 +90,14 @@ impl Updater {
     }
 
     fn settle(&self, outcome: Outcome) -> Status {
-        match outcome {
-            Outcome::Checked(Ok(Some(release))) => Status::Available(release),
-            Outcome::Checked(Ok(None)) => Status::Current,
-            Outcome::Installed(Ok(version)) => Status::Installed(version),
-            Outcome::Checked(Err(error)) | Outcome::Installed(Err(error)) => {
+        match (outcome, &self.status) {
+            (Outcome::Installed(Err(UpdateError::Declined)), Status::Installing(release)) => {
+                Status::Available(release.clone())
+            }
+            (Outcome::Checked(Ok(Some(release))), _) => Status::Available(release),
+            (Outcome::Checked(Ok(None)), _) => Status::Current,
+            (Outcome::Installed(Ok(version)), _) => Status::Installed(version),
+            (Outcome::Checked(Err(error)) | Outcome::Installed(Err(error)), _) => {
                 Status::Failed(error.to_string())
             }
         }
@@ -113,11 +116,11 @@ impl Updater {
 }
 
 fn apply(release: &Release) -> Result<String, UpdateError> {
-    let bytes = update::download(release)?;
-    let executable = std::env::current_exe().map_err(|source| UpdateError::Replace {
-        path: ".".into(),
-        source,
-    })?;
-    update::replace_executable(&executable, &bytes)?;
+    let download = update::download(release)?;
+    let executable = update::current_executable()?;
+    match update::replace_executable(&executable, download.bytes()) {
+        Err(UpdateError::Protected { .. }) => elevate::replace_executable(&executable, &download)?,
+        result => result?,
+    }
     Ok(release.version.clone())
 }
