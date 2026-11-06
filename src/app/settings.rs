@@ -29,8 +29,6 @@ const RESET_WARNING: &str =
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Category {
     General,
-    Appearance,
-    Viewing,
     Editing,
     Saving,
     ColorPicker,
@@ -41,10 +39,8 @@ pub enum Category {
 }
 
 impl Category {
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 8] = [
         Self::General,
-        Self::Appearance,
-        Self::Viewing,
         Self::Editing,
         Self::Saving,
         Self::ColorPicker,
@@ -57,8 +53,6 @@ impl Category {
     pub fn section(self) -> &'static str {
         match self {
             Self::General => "general",
-            Self::Appearance => "appearance",
-            Self::Viewing => "viewing",
             Self::Editing => "editing",
             Self::Saving => "saving",
             Self::ColorPicker => "color_picker",
@@ -72,8 +66,6 @@ impl Category {
     pub fn label(self) -> &'static str {
         match self {
             Self::General => "General",
-            Self::Appearance => "Appearance",
-            Self::Viewing => "Viewing",
             Self::Editing => "Editing",
             Self::Saving => "Saving and Copying",
             Self::ColorPicker => "Color Picker",

@@ -143,9 +143,12 @@ pub fn download(release: &Release) -> Result<Vec<u8>, UpdateError> {
 }
 
 pub fn replace_executable(target: &Path, bytes: &[u8]) -> Result<(), UpdateError> {
-    let failed = |source| UpdateError::Replace {
-        path: target.to_owned(),
-        source,
+    let failed = |source: std::io::Error| {
+        let path = target.to_owned();
+        match source.kind() {
+            std::io::ErrorKind::PermissionDenied => UpdateError::Protected { path },
+            _ => UpdateError::Replace { path, source },
+        }
     };
     let incoming = target.with_extension("new");
     fs::write(&incoming, bytes).map_err(failed)?;

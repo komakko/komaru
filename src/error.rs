@@ -184,6 +184,10 @@ pub enum UpdateError {
     NoKey,
     #[error("the update signature is not valid")]
     BadSignature,
+    #[error(
+        "{path} needs administrator rights to change; run the new installer from the releases page instead"
+    )]
+    Protected { path: PathBuf },
     #[error("cannot replace {path}: {source}")]
     Replace {
         path: PathBuf,

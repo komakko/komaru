@@ -20,7 +20,7 @@ fn run_viewer(launch_files: Vec<PathBuf>) -> eframe::Result {
         .with_app_id(identity::NAME)
         .with_decorations(false)
         .with_transparent(true)
-        .with_inner_size([960.0, 640.0])
+        .with_inner_size([550.0, 400.0])
         .with_min_inner_size([360.0, 240.0]);
     if let Some(icon) = platform::window_icon() {
         viewport = viewport.with_icon(icon);

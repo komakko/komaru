@@ -32,9 +32,9 @@ pub enum Control {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Setting {
     Language,
+    Theme,
     RememberRecent,
     RecentCount,
-    Theme,
     RefitAfterTurn,
     ResizeFilter,
     ResizeUnit,
@@ -138,6 +138,18 @@ pub static ENTRIES: &[Entry] = &[
         control: choice(&[variant("en", "English")]),
     },
     Entry {
+        setting: Setting::Theme,
+        category: Category::General,
+        label: "Theme",
+        hint: "Colors of the window",
+        control: choice(&[
+            variant("slate", "Slate"),
+            variant("midnight", "Midnight"),
+            variant("light", "Light"),
+            variant("system", "Follow system"),
+        ]),
+    },
+    Entry {
         setting: Setting::RememberRecent,
         category: Category::General,
         label: "Remember recent files",
@@ -152,20 +164,8 @@ pub static ENTRIES: &[Entry] = &[
         control: number(10, 1, 50, ""),
     },
     Entry {
-        setting: Setting::Theme,
-        category: Category::Appearance,
-        label: "Theme",
-        hint: "Colors of the window",
-        control: choice(&[
-            variant("slate", "Slate"),
-            variant("midnight", "Midnight"),
-            variant("light", "Light"),
-            variant("system", "Follow system"),
-        ]),
-    },
-    Entry {
         setting: Setting::RefitAfterTurn,
-        category: Category::Viewing,
+        category: Category::Editing,
         label: "Refit after rotate or flip",
         hint: "Reset zoom and pan to fit the window after turning the image",
         control: Control::Toggle(false),

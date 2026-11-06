@@ -145,10 +145,15 @@ jobs:
           printf 'version = "%s"\n' "${GITHUB_REF_NAME#v}" > latest.toml
           if [ -n "$MINISIGN_SECRET_KEY" ]; then
             sudo apt-get install -y --no-install-recommends minisign
-            printf '%s\n' "$MINISIGN_SECRET_KEY" > "$RUNNER_TEMP/komaru.key"
+            key="$RUNNER_TEMP/komaru.key"
+            printf '%s\n' "$MINISIGN_SECRET_KEY" | tr -d '\r' | sed '/^[[:space:]]*$/d' > "$key"
+            if [ "$(wc -l < "$key")" -eq 1 ]; then
+              { echo "untrusted comment: minisign secret key"; cat "$key"; } > "$key.full"
+              mv "$key.full" "$key"
+            fi
             quotes="'''"
             for name in komaru-x86_64-linux komaru-x86_64-windows.exe; do
-              minisign -S -s "$RUNNER_TEMP/komaru.key" -m "$name" -x "$name.minisig"
+              minisign -S -s "$key" -m "$name" -x "$name.minisig"
               {
                 printf '\n[artifacts."%s"]\n' "$name"
                 printf 'url = "%s/%s"\n' "$base" "$name"
@@ -157,7 +162,7 @@ jobs:
                 printf '%s\n' "$quotes"
               } >> latest.toml
             done
-            rm -f "$RUNNER_TEMP/komaru.key"
+            rm -f "$key"
           fi
 
       - name: Publish
@@ -171,6 +176,6 @@ jobs:
             *-*) channel=--prerelease ;;
             *) channel= ;;
           esac
-          gh release create "$GITHUB_REF_NAME" $channel --generate-notes ./*
+          gh release create "$GITHUB_REF_NAME" $channel --notes "" ./*
           gh release view beta >/dev/null 2>&1 || gh release create beta --prerelease --title beta --notes "Holds latest.toml for the beta update channel."
           gh release upload beta latest.toml --clobber
