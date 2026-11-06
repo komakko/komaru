@@ -90,7 +90,7 @@ fn content(
             .clicked();
         back.or(toggle)
             .or(forward)
-            .or(save.then_some(Action::SaveAs))
+            .or(save.then_some(Action::SaveFrame))
     })
     .inner
 }

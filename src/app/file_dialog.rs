@@ -6,7 +6,7 @@ use rfd::AsyncFileDialog;
 use crate::core::ingest::Payload;
 use crate::core::loader::LoadRequester;
 
-const IMAGE_EXTENSIONS: [&str; 6] = ["jpg", "jpeg", "png", "webp", "gif", "bmp"];
+const IMAGE_EXTENSIONS: [&str; 7] = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "avif"];
 
 static DIALOG_OPEN: AtomicBool = AtomicBool::new(false);
 

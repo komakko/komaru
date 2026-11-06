@@ -1,11 +1,14 @@
 use crate::app::settings::Category;
 use crate::app::theme;
+use crate::core::gif_encode;
 use crate::core::limits::{DEFAULT_DECODED_BYTES, DEFAULT_ENCODED_BYTES};
 use crate::core::resample::Filter;
 use crate::core::rgba::Rgba;
 
 const BYTES_PER_MIB: u64 = 1024 * 1024;
 const MAX_LIMIT_MIB: u32 = 65_536;
+const MIN_GIF_COLORS: u32 = gif_encode::MIN_COLORS as u32;
+const MAX_GIF_COLORS: u32 = gif_encode::MAX_COLORS as u32;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Variant {
@@ -43,6 +46,10 @@ pub enum Setting {
     LossyQuality,
     WebpMode,
     PngCompression,
+    AvifSpeed,
+    GifCompress,
+    GifColors,
+    GifDither,
     LossySources,
     PickMode,
     PickCursor,
@@ -69,6 +76,10 @@ impl Setting {
             Self::LossyQuality => "lossy_quality",
             Self::WebpMode => "webp_lossy",
             Self::PngCompression => "png_compression",
+            Self::AvifSpeed => "avif_speed",
+            Self::GifCompress => "gif_compress",
+            Self::GifColors => "gif_colors",
+            Self::GifDither => "gif_dither",
             Self::LossySources => "lossy_sources",
             Self::PickMode => "pick_one_shot",
             Self::PickCursor => "pick_loupe",
@@ -209,7 +220,7 @@ pub static ENTRIES: &[Entry] = &[
         setting: Setting::LossyQuality,
         category: Category::Saving,
         label: "Lossy quality",
-        hint: "Quality used when saving JPEG and lossy WebP, 1 to 100",
+        hint: "Quality used when saving JPEG, AVIF and lossy WebP, 1 to 100",
         control: number(90, 1, 100, ""),
     },
     Entry {
@@ -232,6 +243,41 @@ pub static ENTRIES: &[Entry] = &[
             ],
             selected: 1,
         },
+    },
+    Entry {
+        setting: Setting::AvifSpeed,
+        category: Category::Saving,
+        label: "AVIF speed",
+        hint: "Encoder effort when saving AVIF, slower is smaller",
+        control: Control::Choice {
+            options: &[
+                variant("fast", "Fast"),
+                variant("balanced", "Balanced"),
+                variant("best", "Best"),
+            ],
+            selected: 1,
+        },
+    },
+    Entry {
+        setting: Setting::GifCompress,
+        category: Category::Saving,
+        label: "GIF compression",
+        hint: "Off writes every frame whole with up to 256 colors, exact when a frame fits",
+        control: Control::Toggle(true),
+    },
+    Entry {
+        setting: Setting::GifColors,
+        category: Category::Saving,
+        label: "GIF palette size",
+        hint: "Colors per frame when GIF compression is on, fewer is smaller",
+        control: number(256, MIN_GIF_COLORS, MAX_GIF_COLORS, ""),
+    },
+    Entry {
+        setting: Setting::GifDither,
+        category: Category::Saving,
+        label: "GIF dithering",
+        hint: "Smooth gradients when a frame needs more colors than the palette holds",
+        control: Control::Toggle(true),
     },
     Entry {
         setting: Setting::LossySources,

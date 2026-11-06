@@ -1,9 +1,11 @@
+use image::codecs::avif::AvifEncoder;
 use image::codecs::bmp::BmpEncoder;
 use image::codecs::jpeg::JpegEncoder;
 use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 use image::codecs::webp::WebPEncoder;
 use image::{ExtendedColorType, ImageEncoder};
 
+use crate::core::gif_encode::{self, GifOptions};
 use crate::core::ingest::RawPixels;
 use crate::core::rgba::Rgba;
 use crate::error::EncodeError;
@@ -24,10 +26,29 @@ pub enum WebpMode {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum AvifSpeed {
+    Fast,
+    Balanced,
+    Best,
+}
+
+impl AvifSpeed {
+    fn rav1e(self) -> u8 {
+        match self {
+            Self::Fast => 10,
+            Self::Balanced => 7,
+            Self::Best => 4,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct EncodeOptions {
     pub lossy_quality: u8,
     pub webp: WebpMode,
     pub png: PngLevel,
+    pub avif_speed: AvifSpeed,
+    pub gif: GifOptions,
     pub flatten: Rgba,
 }
 
@@ -37,6 +58,8 @@ impl Default for EncodeOptions {
             lossy_quality: 90,
             webp: WebpMode::Lossless,
             png: PngLevel::Default,
+            avif_speed: AvifSpeed::Balanced,
+            gif: GifOptions::default(),
             flatten: Rgba::new(255, 255, 255, 255),
         }
     }
@@ -50,6 +73,14 @@ impl PngLevel {
             Self::Best => CompressionType::Best,
         }
     }
+
+    pub fn animated_compression(self) -> png::Compression {
+        match self {
+            Self::Fast => png::Compression::Fast,
+            Self::Default => png::Compression::Balanced,
+            Self::Best => png::Compression::High,
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -57,11 +88,24 @@ pub enum Format {
     Png,
     Jpeg,
     WebP,
+    Avif,
+    Gif,
     Bmp,
 }
 
 impl Format {
-    pub const ALL: [Self; 4] = [Self::Png, Self::Jpeg, Self::WebP, Self::Bmp];
+    pub const ALL: [Self; 6] = [
+        Self::Png,
+        Self::Jpeg,
+        Self::WebP,
+        Self::Avif,
+        Self::Gif,
+        Self::Bmp,
+    ];
+
+    pub fn animates(self) -> bool {
+        matches!(self, Self::Png | Self::WebP | Self::Gif)
+    }
 
     pub fn from_extension(extension: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|format| {
@@ -77,6 +121,8 @@ impl Format {
             Self::Png => &["png"],
             Self::Jpeg => &["jpg", "jpeg"],
             Self::WebP => &["webp"],
+            Self::Avif => &["avif"],
+            Self::Gif => &["gif"],
             Self::Bmp => &["bmp"],
         }
     }
@@ -86,6 +132,8 @@ impl Format {
             Self::Png => "PNG",
             Self::Jpeg => "JPEG",
             Self::WebP => "WebP",
+            Self::Avif => "AVIF",
+            Self::Gif => "GIF",
             Self::Bmp => "BMP",
         }
     }
@@ -127,6 +175,24 @@ pub fn encode(
                 height,
                 ExtendedColorType::Rgb8,
             )?,
+        Format::Avif => AvifEncoder::new_with_speed_quality(
+            &mut bytes,
+            options.avif_speed.rav1e(),
+            options.lossy_quality,
+        )
+        .write_image(&image.rgba, width, height, ExtendedColorType::Rgba8)?,
+        Format::Gif => {
+            let still = RawPixels {
+                width: image.width,
+                height: image.height,
+                rgba: image.rgba.clone(),
+            };
+            bytes = gif_encode::encode(
+                std::iter::once((still, std::time::Duration::ZERO)),
+                std::num::NonZeroU32::new(1),
+                options.gif,
+            )?;
+        }
         Format::Bmp => BmpEncoder::new(&mut bytes).write_image(
             &flattened(&image.rgba, options.flatten),
             width,
@@ -184,6 +250,30 @@ mod tests {
             let bytes = encode(&source, format, EncodeOptions::default()).expect("encodes");
             assert_eq!(decoded(&bytes).into_raw(), source.rgba, "{format:?}");
         }
+    }
+
+    #[test]
+    fn avif_round_trips_with_alpha_and_gif_is_exact_when_it_fits() {
+        let source = gradient(48, 32, |index| if index % 5 == 0 { 0 } else { 255 });
+        let options = EncodeOptions {
+            avif_speed: AvifSpeed::Fast,
+            lossy_quality: 95,
+            ..EncodeOptions::default()
+        };
+        let avif = decoded(&encode(&source, Format::Avif, options).expect("encodes"));
+        assert_eq!((avif.width(), avif.height()), (48, 32));
+        let flat = RawPixels {
+            width: 4,
+            height: 2,
+            rgba: [[255, 0, 0, 255], [0, 255, 0, 255]]
+                .into_iter()
+                .cycle()
+                .take(8)
+                .flatten()
+                .collect(),
+        };
+        let gif = decoded(&encode(&flat, Format::Gif, EncodeOptions::default()).expect("encodes"));
+        assert_eq!(gif.into_raw(), flat.rgba);
     }
 
     #[test]

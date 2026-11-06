@@ -1,7 +1,8 @@
 use crate::app::color_tool::{PickCursor, PickMode, ToolStyle};
 use crate::app::settings_entries::{Control, ENTRIES, FILTERS, Setting, THEMES};
 use crate::app::theme;
-use crate::core::encode::{EncodeOptions, PngLevel, WebpMode};
+use crate::core::encode::{AvifSpeed, EncodeOptions, PngLevel, WebpMode};
+use crate::core::gif_encode::GifOptions;
 use crate::core::limits::Limits;
 use crate::core::resample::Filter;
 use crate::core::rgba::Rgba;
@@ -9,6 +10,7 @@ use crate::core::update::Channel;
 
 const BYTES_PER_MIB: u64 = 1024 * 1024;
 const PNG_LEVELS: [PngLevel; 3] = [PngLevel::Fast, PngLevel::Default, PngLevel::Best];
+const AVIF_SPEEDS: [AvifSpeed; 3] = [AvifSpeed::Fast, AvifSpeed::Balanced, AvifSpeed::Best];
 const WEBP_MODES: [WebpMode; 2] = [WebpMode::Lossless, WebpMode::Lossy];
 const RESIZE_UNITS: [ResizeUnit; 2] = [ResizeUnit::Pixels, ResizeUnit::Percent];
 const LOSSY_POLICIES: [LossyPolicy; 3] = [
@@ -68,6 +70,12 @@ impl Preferences {
                 lossy_quality: reader.number(Setting::LossyQuality).clamp(1, 100) as u8,
                 webp: reader.pick(Setting::WebpMode, &WEBP_MODES),
                 png: reader.pick(Setting::PngCompression, &PNG_LEVELS),
+                avif_speed: reader.pick(Setting::AvifSpeed, &AVIF_SPEEDS),
+                gif: GifOptions {
+                    colors: reader.number(Setting::GifColors) as u16,
+                    dither: reader.toggle(Setting::GifDither),
+                    compress: reader.toggle(Setting::GifCompress),
+                },
                 flatten: reader.color(Setting::FlattenColor),
             },
             lossy_sources: reader.pick(Setting::LossySources, &LOSSY_POLICIES),
@@ -159,6 +167,7 @@ mod tests {
             (Setting::ResizeUnit, RESIZE_UNITS.len()),
             (Setting::WebpMode, WEBP_MODES.len()),
             (Setting::PngCompression, PNG_LEVELS.len()),
+            (Setting::AvifSpeed, AVIF_SPEEDS.len()),
             (Setting::LossySources, LOSSY_POLICIES.len()),
             (Setting::PickMode, PICK_MODES.len()),
             (Setting::PickCursor, PICK_CURSORS.len()),

@@ -1,4 +1,5 @@
 pub mod animation;
+pub mod animation_encode;
 mod avif_orientation;
 mod colour;
 pub mod config;
@@ -7,6 +8,7 @@ pub mod decode;
 pub mod edit;
 pub mod encode;
 pub mod export;
+pub mod gif_encode;
 pub mod info;
 pub mod ingest;
 pub mod limits;

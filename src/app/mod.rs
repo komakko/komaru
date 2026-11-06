@@ -84,7 +84,7 @@ use prompt::Question;
 use replay_job::ReplayRequest;
 use resize_job::ResizeRequest;
 use resize_popover::{Entry, ResizeDraft};
-use save::{SaveRequest, suggested_name};
+use save::{AnimatedSave, SaveRequest, suggested_name};
 use settings::{Changed, Settings};
 use shortcuts::ShortcutBus;
 use status_bar::{ImageStatus, Notice};
@@ -613,7 +613,8 @@ impl KomaruApp {
                 paste::paste_from_clipboard(self.loader.requester());
             }
             Action::CopyImage => self.copy_image(ctx),
-            Action::SaveAs => self.save_image(ctx),
+            Action::SaveAs => self.save_image(ctx, true),
+            Action::SaveFrame => self.save_image(ctx, false),
             Action::OpenRecent(index) => self.open_recent(index),
             Action::ClearRecents => {
                 if self.recents.clear() {
@@ -689,14 +690,14 @@ impl KomaruApp {
             .start(ctx, move |reporter| copy::copy(request, reporter));
     }
 
-    fn save_image(&mut self, ctx: &Context) {
+    fn save_image(&mut self, ctx: &Context, whole_animation: bool) {
         let Some(shown) = &self.shown else {
             return;
         };
         if self.jobs.is_running() {
             return;
         }
-        let request = shown.save_request(&self.prefs);
+        let request = shown.save_request(&self.prefs, whole_animation);
         self.jobs
             .start(ctx, move |reporter| save::save_as(request, reporter));
     }
@@ -804,6 +805,9 @@ impl KomaruApp {
             }
             Completed::CopiedFile(name) => Notice::Done(format!("Copied {name}")),
             Completed::Saved(name) => Notice::Done(format!("Saved {name}")),
+            Completed::SavedFrame(name) => Notice::Done(format!(
+                "Saved {name} (shown frame only, this format has no animation)"
+            )),
             Completed::Resized(resized, filter) => self.finish_resize(resized, filter),
             Completed::Cropped(cropped, rect) => self.finish_crop(cropped, rect),
             Completed::Replayed(replayed, target) => self.finish_replay(replayed, target),
@@ -1074,14 +1078,17 @@ impl ShownImage {
         warns.then_some(self.source.file_size).flatten()
     }
 
-    fn copy_request(&self, prefs: &Preferences) -> CopyRequest {
-        let unedited_file = if self.edits.is_modified() {
+    fn unedited_file(&self) -> Option<SourceFile> {
+        if self.edits.is_modified() {
             None
         } else {
             self.source_file.clone()
-        };
+        }
+    }
+
+    fn copy_request(&self, prefs: &Preferences) -> CopyRequest {
         CopyRequest {
-            file: unedited_file,
+            file: self.unedited_file(),
             pixels: Arc::clone(&self.pixels),
             orientation: self.edits.orientation(),
             options: prefs.encode,
@@ -1133,18 +1140,33 @@ impl ShownImage {
         )
     }
 
-    fn save_request(&self, prefs: &Preferences) -> SaveRequest {
+    fn save_request(&self, prefs: &Preferences, whole_animation: bool) -> SaveRequest {
         let directory = self
             .source_file
             .as_ref()
             .and_then(|file| file.path.parent())
             .map(Path::to_owned);
+        let animation = self
+            .animation
+            .as_ref()
+            .filter(|_| whole_animation)
+            .map(|animation| {
+                let (frames, plays) = animation.frames_to_save();
+                AnimatedSave {
+                    frames,
+                    plays,
+                    unedited_file: self.unedited_file(),
+                }
+            });
+        let (name, forced) = if animation.is_some() {
+            (self.title.clone(), None)
+        } else {
+            (self.save_title(), self.forced_format(prefs.lossy_sources))
+        };
         SaveRequest {
-            suggested_name: suggested_name(
-                &self.save_title(),
-                self.forced_format(prefs.lossy_sources),
-            ),
+            suggested_name: suggested_name(&name, forced),
             directory,
+            animation,
             pixels: Arc::clone(&self.pixels),
             orientation: self.edits.orientation(),
             options: prefs.encode,

@@ -35,6 +35,15 @@ impl Animation {
         }
     }
 
+    pub fn frames_to_save(&self) -> (Vec<(Arc<ColorImage>, Duration)>, Option<NonZeroU32>) {
+        let frames = self
+            .frames
+            .iter()
+            .map(|frame| (Arc::clone(&frame.pixels), frame.delay))
+            .collect();
+        (frames, self.plays.and_then(NonZeroU32::new))
+    }
+
     pub fn len(&self) -> usize {
         self.frames.len()
     }

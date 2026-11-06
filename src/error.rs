@@ -28,6 +28,10 @@ pub enum EncodeError {
     Image(#[from] image::ImageError),
     #[error("cannot encode image: {0}")]
     Backend(&'static str),
+    #[error("cannot encode GIF: {0}")]
+    Gif(#[from] gif::EncodingError),
+    #[error("cannot encode PNG: {0}")]
+    Png(#[from] png::EncodingError),
 }
 
 #[derive(Debug, Error)]

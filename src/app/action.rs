@@ -6,6 +6,7 @@ pub enum Action {
     Paste,
     CopyImage,
     SaveAs,
+    SaveFrame,
     Clear,
     Quit,
     OpenSettings,
@@ -87,6 +88,7 @@ impl Action {
             | Self::Paste
             | Self::CopyImage
             | Self::SaveAs
+            | Self::SaveFrame
             | Self::Clear
             | Self::OpenSettings
             | Self::FitToWindow
@@ -120,6 +122,7 @@ impl Action {
             Self::Paste => "Paste",
             Self::CopyImage => "Copy Image",
             Self::SaveAs => "Save As",
+            Self::SaveFrame => "Save Frame",
             Self::Clear => "Clear",
             Self::Quit => "Quit",
             Self::OpenSettings => "Settings",
@@ -154,6 +157,7 @@ impl Action {
         match self {
             Self::CopyImage
             | Self::SaveAs
+            | Self::SaveFrame
             | Self::Clear
             | Self::FitToWindow
             | Self::ActualSize

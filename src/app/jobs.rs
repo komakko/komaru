@@ -18,6 +18,7 @@ pub enum Completed {
     CopiedImage([usize; 2]),
     CopiedFile(String),
     Saved(String),
+    SavedFrame(String),
     Resized(EditedImage, Filter),
     Cropped(EditedImage, PixelRect),
     Replayed(EditedImage, usize),
