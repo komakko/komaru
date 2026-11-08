@@ -316,7 +316,7 @@ fn updates_section(ui: &mut Ui, updates: &Updater) -> bool {
     match updates.status() {
         Status::Off => dim(
             ui,
-            "Update checks are off. Komaru makes no network connections.",
+            "Update checks are off.",
         ),
         Status::Checking => dim(ui, "Checking for updates..."),
         Status::Current => dim(

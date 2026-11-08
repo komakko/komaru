@@ -185,7 +185,7 @@ pub static ENTRIES: &[Entry] = &[
         setting: Setting::ResizeFilter,
         category: Category::Editing,
         label: "Resize filter",
-        hint: "Resampling method used by Resize",
+        hint: "Resampling method used by the resize tool",
         control: choice(&[
             variant("lanczos3", "Lanczos3"),
             variant("catmull_rom", "Catmull-Rom"),
@@ -199,14 +199,14 @@ pub static ENTRIES: &[Entry] = &[
         setting: Setting::ResizeUnit,
         category: Category::Editing,
         label: "Resize unit",
-        hint: "Unit of the width and height fields in Resize",
+        hint: "Unit of the width and height fields in the resize tool",
         control: choice(&[variant("pixels", "Pixels"), variant("percent", "Percent")]),
     },
     Entry {
         setting: Setting::ConfirmDiscard,
         category: Category::Editing,
         label: "Confirm before discarding edits",
-        hint: "Ask before open, paste, clear or quit throws away edits",
+        hint: "Ask before open, paste, clear or quit actions throw away edits",
         control: Control::Toggle(false),
     },
     Entry {
@@ -220,7 +220,7 @@ pub static ENTRIES: &[Entry] = &[
         setting: Setting::LossyQuality,
         category: Category::Saving,
         label: "Lossy quality",
-        hint: "Quality used when saving JPEG, AVIF and lossy WebP, 1 to 100",
+        hint: "Quality used when saving JPEG, AVIF and lossy WebP",
         control: number(90, 1, 100, ""),
     },
     Entry {
@@ -283,7 +283,7 @@ pub static ENTRIES: &[Entry] = &[
         setting: Setting::LossySources,
         category: Category::Saving,
         label: "Lossy sources",
-        hint: "How Copy and Save As treat JPEG and WebP images, which grow a lot as PNG",
+        hint: "How Copy and Save As actions treat JPEG and WebP images",
         control: choice(&[
             variant("png", "Convert to PNG"),
             variant("source", "Keep source format"),
@@ -349,7 +349,7 @@ pub static ENTRIES: &[Entry] = &[
         setting: Setting::CheckForUpdates,
         category: Category::Updates,
         label: "Check for updates",
-        hint: "Look for a newer version at startup; off means no network use",
+        hint: "Look for a newer version at startup",
         control: Control::Toggle(false),
     },
     Entry {
