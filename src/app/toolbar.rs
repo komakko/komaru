@@ -16,6 +16,7 @@ const MARGIN_Y: i8 = 4;
 const BUTTON_SIZE: f32 = 22.0;
 const BUTTON_RADIUS: u8 = 3;
 const WINDOW_GLYPH_REACH: f32 = 4.5;
+const PIN_GLYPH_REACH: f32 = 7.0;
 const MENU_BUTTON_PADDING: [f32; 2] = [8.0, 2.0];
 const TITLE_GAP: f32 = 8.0;
 const WINDOW_CONTROL_COUNT: f32 = 4.0;
@@ -207,7 +208,7 @@ fn window_controls(ui: &mut Ui, pin: &PinView, shortcuts: &ShortcutBus) -> Optio
 fn pin_button(ui: &mut Ui, pin: &PinView, shortcuts: &ShortcutBus) -> Response {
     let pinned = matches!(pin, PinView::On);
     let available = !matches!(pin, PinView::Unavailable(_));
-    let response = glyph_button(ui, Icon::Pin { pinned }, available);
+    let response = glyph_button(ui, Icon::Pin { pinned }, available, PIN_GLYPH_REACH);
     let tooltip = match pin {
         PinView::On => shortcuts.hinted(ui.ctx(), "Unpin", Action::TogglePin),
         PinView::Off => shortcuts.hinted(ui.ctx(), "Keep on top", Action::TogglePin),
@@ -217,10 +218,10 @@ fn pin_button(ui: &mut Ui, pin: &PinView, shortcuts: &ShortcutBus) -> Response {
 }
 
 fn window_button(ui: &mut Ui, icon: Icon) -> Response {
-    glyph_button(ui, icon, true)
+    glyph_button(ui, icon, true, WINDOW_GLYPH_REACH)
 }
 
-fn glyph_button(ui: &mut Ui, icon: Icon, enabled: bool) -> Response {
+fn glyph_button(ui: &mut Ui, icon: Icon, enabled: bool, reach: f32) -> Response {
     let sense = if enabled {
         Sense::click()
     } else {
@@ -250,7 +251,7 @@ fn glyph_button(ui: &mut Ui, icon: Icon, enabled: bool) -> Response {
     icons::paint(
         painter,
         rect.center(),
-        WINDOW_GLYPH_REACH,
+        reach,
         icon,
         icon_color(icon, enabled),
     );

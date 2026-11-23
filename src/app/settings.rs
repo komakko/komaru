@@ -14,10 +14,14 @@ use crate::app::updates::{Status, Updater};
 use crate::identity;
 
 const NAV_WIDTH: f32 = 180.0;
+const NAV_MIN_WIDTH: f32 = 148.0;
+const NAV_SHARE: f32 = 0.27;
 const NAV_PADDING: f32 = 8.0;
 const NAV_TEXT_INSET: f32 = 10.0;
 const NAV_ITEM_HEIGHT: f32 = 26.0;
 const CONTENT_PADDING: f32 = 16.0;
+const COMPACT_CONTENT_PADDING: f32 = 12.0;
+const COMPACT_BELOW: f32 = 640.0;
 const CLOSE_SIDE: f32 = 24.0;
 const CLOSE_REACH: f32 = 6.0;
 const TITLE_SIZE: f32 = 17.0;
@@ -73,6 +77,25 @@ impl Category {
             Self::Updates => "Updates",
             Self::Shortcuts => "Keyboard Shortcuts",
             Self::About => "About",
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct Metrics {
+    nav: f32,
+    padding: f32,
+}
+
+impl Metrics {
+    fn for_width(width: f32) -> Self {
+        Self {
+            nav: (width * NAV_SHARE).clamp(NAV_MIN_WIDTH, NAV_WIDTH),
+            padding: if width < COMPACT_BELOW {
+                COMPACT_CONTENT_PADDING
+            } else {
+                CONTENT_PADDING
+            },
         }
     }
 }
@@ -144,7 +167,8 @@ impl Settings {
             .fixed_pos(area.min)
             .show(ctx, |ui| {
                 let (rect, _) = ui.allocate_exact_size(area.size(), Sense::click_and_drag());
-                let nav = Rect::from_min_size(rect.min, vec2(NAV_WIDTH, rect.height()));
+                let metrics = Metrics::for_width(area.width());
+                let nav = Rect::from_min_size(rect.min, vec2(metrics.nav, rect.height()));
                 let content = Rect::from_min_max(nav.right_top(), rect.right_bottom());
                 ui.painter().rect_filled(rect, 0.0, theme::panel_fill());
                 ui.painter().rect_filled(nav, 0.0, theme::viewer_fill());
@@ -154,27 +178,31 @@ impl Settings {
                     Stroke::new(1.0, theme::hover_fill()),
                 );
                 let tabs = nav.shrink(NAV_PADDING);
-                self.show_navigation(&mut ui.new_child(UiBuilder::new().max_rect(tabs)));
+                self.show_navigation(
+                    &mut ui.new_child(UiBuilder::new().max_rect(tabs)),
+                    metrics.nav,
+                );
                 changed = self.show_content(
                     &mut ui.new_child(UiBuilder::new().max_rect(content)),
+                    metrics.padding,
                     bus,
                     updates,
                 );
-                if close_button(ui, content) {
+                if close_button(ui, content, metrics.padding) {
                     self.close();
                 }
             });
         changed
     }
 
-    fn show_navigation(&mut self, ui: &mut Ui) {
+    fn show_navigation(&mut self, ui: &mut Ui, width: f32) {
         ui.set_clip_rect(ui.max_rect());
         ui.scope(|ui| {
             theme::flat_item_style(ui.style_mut());
             ui.spacing_mut().item_spacing.y = 2.0;
             ui.spacing_mut().button_padding.x = NAV_TEXT_INSET;
             ui.with_layout(Layout::top_down_justified(Align::LEFT), |ui| {
-                ui.set_width(NAV_WIDTH - 2.0 * NAV_PADDING);
+                ui.set_width(width - 2.0 * NAV_PADDING);
                 ui.add_space(0.0);
                 for category in Category::ALL {
                     let button = Button::new(category.label())
@@ -191,9 +219,15 @@ impl Settings {
         });
     }
 
-    fn show_content(&mut self, ui: &mut Ui, bus: &mut ShortcutBus, updates: &Updater) -> Changed {
+    fn show_content(
+        &mut self,
+        ui: &mut Ui,
+        padding: f32,
+        bus: &mut ShortcutBus,
+        updates: &Updater,
+    ) -> Changed {
         let content = ui.max_rect();
-        let padded = content.shrink(CONTENT_PADDING);
+        let padded = content.shrink(padding);
         let mut header = ui.new_child(UiBuilder::new().max_rect(padded));
         header.spacing_mut().item_spacing.y = ROW_SPACING;
         let title = RichText::new(self.category.label())
@@ -276,9 +310,8 @@ impl Settings {
     }
 }
 
-fn close_button(ui: &mut Ui, content: Rect) -> bool {
-    let corner =
-        content.right_top() + Vec2::new(-CLOSE_SIDE - CONTENT_PADDING / 2.0, CONTENT_PADDING / 2.0);
+fn close_button(ui: &mut Ui, content: Rect, padding: f32) -> bool {
+    let corner = content.right_top() + Vec2::new(-CLOSE_SIDE - padding / 2.0, padding / 2.0);
     let rect = Rect::from_min_size(corner, Vec2::splat(CLOSE_SIDE));
     let mut child = ui.new_child(UiBuilder::new().max_rect(rect));
     icon_button(
@@ -314,10 +347,7 @@ fn about(ui: &mut Ui) {
 fn updates_section(ui: &mut Ui, updates: &Updater) -> bool {
     ui.add_space(SECTION_GAP);
     match updates.status() {
-        Status::Off => dim(
-            ui,
-            "Update checks are off.",
-        ),
+        Status::Off => dim(ui, "Update checks are off."),
         Status::Checking => dim(ui, "Checking for updates..."),
         Status::Current => dim(
             ui,

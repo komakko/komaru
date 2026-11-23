@@ -1,6 +1,6 @@
 use eframe::egui::{
-    Align2, Color32, Context, CornerRadius, Event, Id, Key, Label, Pos2, Rect, RichText,
-    ScrollArea, Sense, Stroke, StrokeKind, TextStyle, Ui, UiBuilder, vec2,
+    Align, Align2, Color32, Context, CornerRadius, Event, Id, Key, Label, Layout, Painter, Pos2,
+    Rect, RichText, ScrollArea, Sense, Stroke, StrokeKind, TextStyle, Ui, UiBuilder, vec2,
 };
 
 use crate::app::commands::{COMMANDS, Command, MAX_SHORTCUTS};
@@ -10,18 +10,23 @@ use crate::app::shortcut_text;
 use crate::app::shortcuts::{BindError, ShortcutBus};
 use crate::app::theme;
 
-const ROW_HEIGHT: f32 = 34.0;
-const CHIP_HEIGHT: f32 = 24.0;
+const ROW_HEIGHT: f32 = 30.0;
+const STACKED_ROW_HEIGHT: f32 = 58.0;
+const STACKED_LABEL_OFFSET: f32 = 16.0;
+const STACKED_CHIP_OFFSET: f32 = 43.0;
+const CHIP_HEIGHT: f32 = 22.0;
 const CHIP_RADIUS: u8 = 3;
-const CHIP_TEXT_INSET: f32 = 10.0;
-const CHIP_WIDTH: f32 = 170.0;
+const CHIP_TEXT_INSET: f32 = 8.0;
+const CHIP_MAX_WIDTH: f32 = 170.0;
+const CHIP_MIN_WIDTH: f32 = 108.0;
+const ACTION_MIN_WIDTH: f32 = 100.0;
 const CLEAR_SIDE: f32 = 18.0;
 const CLEAR_REACH: f32 = 3.5;
-const CLEAR_INSET: f32 = 3.0;
+const CLEAR_INSET: f32 = 2.0;
 const RESET_SIDE: f32 = 24.0;
 const RESET_REACH: f32 = 5.0;
-const GAP: f32 = 8.0;
-const ROW_INSET: f32 = 10.0;
+const GAP: f32 = 6.0;
+const ROW_INSET: f32 = 8.0;
 const END_PADDING: f32 = 32.0;
 const SECTION_GAP: f32 = 12.0;
 const RESET_ALL_TEXT: &str = "Reset all to defaults";
@@ -166,14 +171,15 @@ impl ShortcutPage {
 
     fn table(&self, ui: &mut Ui, bus: &ShortcutBus) -> Option<Intent> {
         ui.spacing_mut().item_spacing.y = 0.0;
-        header(ui);
+        let arrangement = Arrangement::for_width(ui.available_width());
+        header(ui, arrangement);
         let live = ui
             .ctx()
             .input(|input| shortcut_text::held_prefix(input.modifiers))
             .unwrap_or_else(|| RECORDING_TEXT.to_owned());
         let mut intent = None;
         for (index, command) in COMMANDS.iter().enumerate() {
-            let found = self.row(ui, bus, command, index, &live);
+            let found = self.row(ui, bus, command, index, &live, arrangement);
             intent = intent.or(found);
         }
         ui.add_space(SECTION_GAP);
@@ -191,9 +197,12 @@ impl ShortcutPage {
         command: &'static Command,
         index: usize,
         live: &str,
+        arrangement: Arrangement,
     ) -> Option<Intent> {
-        let (rect, _) =
-            ui.allocate_exact_size(vec2(ui.available_width(), ROW_HEIGHT), Sense::hover());
+        let (rect, _) = ui.allocate_exact_size(
+            vec2(ui.available_width(), arrangement.row_height()),
+            Sense::hover(),
+        );
         let fill = if ui.rect_contains_pointer(rect) {
             Some(theme::pressed_fill())
         } else {
@@ -202,14 +211,8 @@ impl ShortcutPage {
         if let Some(fill) = fill {
             ui.painter().rect_filled(rect, 0.0, fill);
         }
-        let cells = Cells::in_row(rect);
-        ui.painter().with_clip_rect(cells.action).text(
-            cells.action.left_center(),
-            Align2::LEFT_CENTER,
-            command.action.label(),
-            TextStyle::Body.resolve(ui.style()),
-            theme::icon_idle(),
-        );
+        let cells = Cells::in_row(rect, arrangement);
+        action_label(ui, cells.action, command.action.label());
         let bound: Vec<_> = bus.shortcuts_of(command.action).collect();
         let mut intent = None;
         for (slot, cell) in cells.slots.into_iter().enumerate() {
@@ -245,6 +248,32 @@ impl ShortcutPage {
     }
 }
 
+#[derive(Clone, Copy)]
+enum Arrangement {
+    Inline { chip: f32 },
+    Stacked,
+}
+
+impl Arrangement {
+    fn for_width(width: f32) -> Self {
+        let slots = MAX_SHORTCUTS as f32;
+        let fixed = 2.0 * ROW_INSET + RESET_SIDE + (slots + 1.0) * GAP;
+        let chip = ((width - fixed - ACTION_MIN_WIDTH) / slots).min(CHIP_MAX_WIDTH);
+        if chip >= CHIP_MIN_WIDTH {
+            Self::Inline { chip }
+        } else {
+            Self::Stacked
+        }
+    }
+
+    fn row_height(self) -> f32 {
+        match self {
+            Self::Inline { .. } => ROW_HEIGHT,
+            Self::Stacked => STACKED_ROW_HEIGHT,
+        }
+    }
+}
+
 struct Cells {
     action: Rect,
     slots: [Rect; MAX_SHORTCUTS],
@@ -252,7 +281,14 @@ struct Cells {
 }
 
 impl Cells {
-    fn in_row(row: Rect) -> Self {
+    fn in_row(row: Rect, arrangement: Arrangement) -> Self {
+        match arrangement {
+            Arrangement::Inline { chip } => Self::inline(row, chip),
+            Arrangement::Stacked => Self::stacked(row),
+        }
+    }
+
+    fn inline(row: Rect, chip: f32) -> Self {
         let inner = row.shrink2(vec2(ROW_INSET, 0.0));
         let centre = inner.center().y;
         let reset = Rect::from_center_size(
@@ -260,15 +296,12 @@ impl Cells {
             vec2(RESET_SIDE, RESET_SIDE),
         );
         let slot_count = MAX_SHORTCUTS as f32;
-        let slots_width = slot_count * CHIP_WIDTH + (slot_count - 1.0) * GAP;
+        let slots_width = slot_count * chip + (slot_count - 1.0) * GAP;
         let slots_left = reset.left() - GAP - slots_width;
         let slots = std::array::from_fn(|slot| {
             Rect::from_center_size(
-                Pos2::new(
-                    slots_left + CHIP_WIDTH / 2.0 + slot as f32 * (CHIP_WIDTH + GAP),
-                    centre,
-                ),
-                vec2(CHIP_WIDTH, CHIP_HEIGHT),
+                Pos2::new(slots_left + chip / 2.0 + slot as f32 * (chip + GAP), centre),
+                vec2(chip, CHIP_HEIGHT),
             )
         });
         let action_right = (slots_left - GAP).max(inner.left());
@@ -278,11 +311,102 @@ impl Cells {
             reset,
         }
     }
+
+    fn stacked(row: Rect) -> Self {
+        let inner = row.shrink2(vec2(ROW_INSET, 0.0));
+        let label_centre = row.top() + STACKED_LABEL_OFFSET;
+        let reset = Rect::from_center_size(
+            Pos2::new(inner.right() - RESET_SIDE / 2.0, label_centre),
+            vec2(RESET_SIDE, RESET_SIDE),
+        );
+        let slot_count = MAX_SHORTCUTS as f32;
+        let chip = ((inner.width() - (slot_count - 1.0) * GAP) / slot_count).max(0.0);
+        let slots = std::array::from_fn(|slot| {
+            Rect::from_center_size(
+                Pos2::new(
+                    inner.left() + chip / 2.0 + slot as f32 * (chip + GAP),
+                    row.top() + STACKED_CHIP_OFFSET,
+                ),
+                vec2(chip, CHIP_HEIGHT),
+            )
+        });
+        let action = Rect::from_min_max(
+            Pos2::new(inner.left(), label_centre - RESET_SIDE / 2.0),
+            Pos2::new(reset.left() - GAP, label_centre + RESET_SIDE / 2.0),
+        );
+        Self {
+            action,
+            slots,
+            reset,
+        }
+    }
+}
+
+fn action_label(ui: &mut Ui, cell: Rect, text: &str) {
+    let builder = UiBuilder::new()
+        .max_rect(cell)
+        .layout(Layout::left_to_right(Align::Center));
+    let mut cell_ui = ui.new_child(builder);
+    let label = RichText::new(text).color(theme::icon_idle());
+    let response = cell_ui.add(Label::new(label).truncate().selectable(false));
+    if response.hovered() {
+        let full = ui.painter().layout_no_wrap(
+            text.to_owned(),
+            TextStyle::Body.resolve(ui.style()),
+            theme::icon_idle(),
+        );
+        if full.size().x > cell.width() {
+            response.on_hover_text(text);
+        }
+    }
 }
 
 enum Clicked {
     Body,
     Clear,
+}
+
+struct Look<'a> {
+    fill: Color32,
+    stroke: Stroke,
+    text: &'a str,
+    color: Color32,
+}
+
+fn look(face: &Face, hovered: bool) -> Look<'_> {
+    let hover_or = |idle: Color32| if hovered { theme::hover_fill() } else { idle };
+    match face {
+        Face::Bound(text) => Look {
+            fill: hover_or(theme::viewer_fill()),
+            stroke: Stroke::new(1.0, theme::hover_fill()),
+            text,
+            color: theme::icon_idle(),
+        },
+        Face::Unbound => Look {
+            fill: hover_or(Color32::TRANSPARENT),
+            stroke: Stroke::new(1.0, theme::pressed_fill()),
+            text: UNBOUND_TEXT,
+            color: theme::icon_disabled(),
+        },
+        Face::Recording(text) => Look {
+            fill: theme::selected_fill(),
+            stroke: Stroke::new(1.0, theme::drop_hover_stroke()),
+            text,
+            color: theme::icon_selected(),
+        },
+    }
+}
+
+fn paint_clear(painter: &Painter, rect: Rect, hovered: bool) {
+    if hovered {
+        painter.rect_filled(rect, CornerRadius::same(CHIP_RADIUS), theme::pressed_fill());
+    }
+    let tone = if hovered {
+        theme::icon_selected()
+    } else {
+        theme::text_dim()
+    };
+    icons::paint(painter, rect.center(), CLEAR_REACH, Icon::Close, tone);
 }
 
 fn keycap(ui: &mut Ui, id: Id, rect: Rect, face: &Face) -> Option<Clicked> {
@@ -296,39 +420,23 @@ fn keycap(ui: &mut Ui, id: Id, rect: Rect, face: &Face) -> Option<Clicked> {
     );
     let clear = matches!(face, Face::Bound(_))
         .then(|| ui.interact(clear_rect, id.with("clear"), Sense::click()));
+    let Look {
+        fill,
+        stroke,
+        text,
+        color,
+    } = look(face, body.hovered());
     let painter = ui.painter();
-    let (fill, stroke, text, color) = match face {
-        Face::Bound(text) => (
-            if body.hovered() {
-                theme::hover_fill()
-            } else {
-                theme::viewer_fill()
-            },
-            Stroke::new(1.0, theme::hover_fill()),
-            text.as_str(),
-            theme::icon_idle(),
-        ),
-        Face::Unbound => (
-            if body.hovered() {
-                theme::hover_fill()
-            } else {
-                Color32::TRANSPARENT
-            },
-            Stroke::new(1.0, theme::pressed_fill()),
-            UNBOUND_TEXT,
-            theme::icon_disabled(),
-        ),
-        Face::Recording(text) => (
-            theme::selected_fill(),
-            Stroke::new(1.0, theme::drop_hover_stroke()),
-            text.as_str(),
-            theme::icon_selected(),
-        ),
-    };
     let radius = CornerRadius::same(CHIP_RADIUS);
     painter.rect_filled(rect, radius, fill);
     painter.rect_stroke(rect, radius, stroke, StrokeKind::Inside);
-    painter.text(
+    let text_right = if clear.is_some() {
+        clear_rect.left()
+    } else {
+        rect.right() - CHIP_TEXT_INSET
+    };
+    let text_area = Rect::from_min_max(rect.min, Pos2::new(text_right, rect.max.y));
+    painter.with_clip_rect(text_area).text(
         Pos2::new(rect.left() + CHIP_TEXT_INSET, rect.center().y),
         Align2::LEFT_CENTER,
         text,
@@ -336,15 +444,7 @@ fn keycap(ui: &mut Ui, id: Id, rect: Rect, face: &Face) -> Option<Clicked> {
         color,
     );
     if let Some(clear) = &clear {
-        if clear.hovered() {
-            painter.rect_filled(clear_rect, radius, theme::pressed_fill());
-        }
-        let tone = if clear.hovered() {
-            theme::icon_selected()
-        } else {
-            theme::text_dim()
-        };
-        icons::paint(painter, clear_rect.center(), CLEAR_REACH, Icon::Close, tone);
+        paint_clear(painter, clear_rect, clear.hovered());
     }
     let clear_clicked = clear.is_some_and(|clear| clear.on_hover_text("Clear").clicked());
     if clear_clicked {
@@ -354,9 +454,15 @@ fn keycap(ui: &mut Ui, id: Id, rect: Rect, face: &Face) -> Option<Clicked> {
     }
 }
 
-fn header(ui: &mut Ui) {
-    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_HEIGHT), Sense::hover());
-    let cells = Cells::in_row(rect);
+fn header(ui: &mut Ui, arrangement: Arrangement) {
+    if matches!(arrangement, Arrangement::Stacked) {
+        return;
+    }
+    let (rect, _) = ui.allocate_exact_size(
+        vec2(ui.available_width(), arrangement.row_height()),
+        Sense::hover(),
+    );
+    let cells = Cells::in_row(rect, arrangement);
     let font = TextStyle::Body.resolve(ui.style());
     let titles = [("Action", cells.action.left_center())].into_iter().chain(
         SLOT_TITLES.iter().zip(cells.slots).map(|(title, cell)| {

@@ -1,28 +1,460 @@
-use std::f32::consts::{FRAC_1_SQRT_2, FRAC_PI_2, PI};
-
 use eframe::egui::{Color32, Painter, Pos2, Rect, Shape, Stroke, StrokeKind, Vec2};
 
-const HALF_DISC_STEPS: usize = 10;
-const HALF_DISC_RADIUS: f32 = 0.7;
 const STROKE_WIDTH: f32 = 1.6;
 const HEAVY_STROKE_WIDTH: f32 = 2.2;
-const ARROW_LENGTH: f32 = 0.55;
-const ARROW_SPREAD: f32 = 0.6;
-const ARC_RADIUS: f32 = 0.8;
-const ROTATE_ARC_START: f32 = -0.87;
-const RESET_ARC_START: f32 = 2.35;
-const ARC_SWEEP: f32 = -4.71;
-const ARC_STEPS: usize = 16;
-const LINK_SLIDE: f32 = 0.4;
-const LINK_HALF_LENGTH: f32 = 0.3;
-const LINK_RADIUS: f32 = 0.34;
-const LINK_CAP_STEPS: usize = 8;
-const DROPPER_BULB: Unit = (0.6, -0.6);
-const DROPPER_BULB_RADIUS: f32 = 0.4;
-const PIN_HEAD: Unit = (0.55, -0.55);
-const PIN_HEAD_RADIUS: f32 = 0.89;
+const GLYPH_STROKE_SHARE: f32 = 0.2;
+const PINNED_STROKE_SHARE: f32 = 0.28;
+const MIN_GLYPH_STROKE: f32 = 1.4;
 
 type Unit = (f32, f32);
+
+enum Glyph {
+    Open(&'static [Unit]),
+    Closed(&'static [Unit]),
+    Circle(Unit, f32),
+}
+
+const PIN: &[Glyph] = &[
+    Glyph::Open(&[(0.0, 0.5), (0.0, 1.0)]),
+    Glyph::Closed(&[
+        (-0.3, -0.124),
+        (-0.305, -0.08),
+        (-0.319, -0.038),
+        (-0.343, -0.001),
+        (-0.374, 0.031),
+        (-0.411, 0.055),
+        (-0.589, 0.145),
+        (-0.626, 0.169),
+        (-0.657, 0.201),
+        (-0.681, 0.238),
+        (-0.695, 0.28),
+        (-0.7, 0.324),
+        (-0.7, 0.4),
+        (-0.697, 0.422),
+        (-0.69, 0.443),
+        (-0.678, 0.462),
+        (-0.662, 0.478),
+        (-0.643, 0.49),
+        (-0.622, 0.497),
+        (-0.6, 0.5),
+        (0.6, 0.5),
+        (0.622, 0.497),
+        (0.643, 0.49),
+        (0.662, 0.478),
+        (0.678, 0.462),
+        (0.69, 0.443),
+        (0.697, 0.422),
+        (0.7, 0.4),
+        (0.7, 0.324),
+        (0.695, 0.28),
+        (0.681, 0.238),
+        (0.657, 0.201),
+        (0.626, 0.169),
+        (0.589, 0.145),
+        (0.411, 0.055),
+        (0.374, 0.031),
+        (0.343, -0.001),
+        (0.319, -0.038),
+        (0.305, -0.08),
+        (0.3, -0.124),
+        (0.3, -0.5),
+        (0.303, -0.522),
+        (0.31, -0.543),
+        (0.322, -0.562),
+        (0.338, -0.578),
+        (0.357, -0.59),
+        (0.378, -0.597),
+        (0.4, -0.6),
+        (0.448, -0.606),
+        (0.493, -0.623),
+        (0.533, -0.65),
+        (0.565, -0.686),
+        (0.587, -0.729),
+        (0.599, -0.776),
+        (0.599, -0.824),
+        (0.587, -0.871),
+        (0.565, -0.914),
+        (0.533, -0.95),
+        (0.493, -0.977),
+        (0.448, -0.994),
+        (0.4, -1.0),
+        (-0.4, -1.0),
+        (-0.448, -0.994),
+        (-0.493, -0.977),
+        (-0.533, -0.95),
+        (-0.565, -0.914),
+        (-0.587, -0.871),
+        (-0.599, -0.824),
+        (-0.599, -0.776),
+        (-0.587, -0.729),
+        (-0.565, -0.686),
+        (-0.533, -0.65),
+        (-0.493, -0.623),
+        (-0.448, -0.606),
+        (-0.4, -0.6),
+        (-0.378, -0.597),
+        (-0.357, -0.59),
+        (-0.338, -0.578),
+        (-0.322, -0.562),
+        (-0.31, -0.543),
+        (-0.303, -0.522),
+        (-0.3, -0.5),
+    ]),
+];
+const PIPETTE: &[Glyph] = &[
+    Glyph::Open(&[
+        (0.0, -0.3),
+        (-0.841, 0.541),
+        (-0.873, 0.583),
+        (-0.893, 0.631),
+        (-0.9, 0.683),
+        (-0.9, 0.817),
+        (-0.907, 0.869),
+        (-0.927, 0.917),
+        (-0.959, 0.959),
+        (-0.917, 0.927),
+        (-0.869, 0.907),
+        (-0.817, 0.9),
+        (-0.683, 0.9),
+        (-0.631, 0.893),
+        (-0.583, 0.873),
+        (-0.541, 0.841),
+        (0.3, 0.0),
+    ]),
+    Glyph::Closed(&[
+        (0.6, -0.3),
+        (0.64, -0.26),
+        (0.672, -0.22),
+        (0.693, -0.173),
+        (0.702, -0.123),
+        (0.699, -0.072),
+        (0.683, -0.023),
+        (0.657, 0.021),
+        (0.621, 0.057),
+        (0.577, 0.083),
+        (0.528, 0.099),
+        (0.477, 0.102),
+        (0.427, 0.093),
+        (0.38, 0.072),
+        (0.34, 0.04),
+        (-0.04, -0.34),
+        (-0.072, -0.38),
+        (-0.093, -0.427),
+        (-0.102, -0.477),
+        (-0.099, -0.528),
+        (-0.083, -0.577),
+        (-0.057, -0.621),
+        (-0.021, -0.657),
+        (0.023, -0.683),
+        (0.072, -0.699),
+        (0.123, -0.702),
+        (0.173, -0.693),
+        (0.22, -0.672),
+        (0.26, -0.64),
+        (0.3, -0.6),
+        (0.64, -0.94),
+        (0.68, -0.972),
+        (0.727, -0.993),
+        (0.777, -1.002),
+        (0.828, -0.999),
+        (0.877, -0.983),
+        (0.921, -0.957),
+        (0.957, -0.921),
+        (0.983, -0.877),
+        (0.999, -0.828),
+        (1.002, -0.777),
+        (0.993, -0.727),
+        (0.972, -0.68),
+        (0.94, -0.64),
+    ]),
+    Glyph::Open(&[(-1.0, 1.0), (-0.959, 0.959)]),
+];
+const CROP: &[Glyph] = &[
+    Glyph::Open(&[
+        (-0.6, -1.0),
+        (-0.6, 0.4),
+        (-0.595, 0.445),
+        (-0.58, 0.487),
+        (-0.556, 0.525),
+        (-0.525, 0.556),
+        (-0.487, 0.58),
+        (-0.445, 0.595),
+        (-0.4, 0.6),
+        (1.0, 0.6),
+    ]),
+    Glyph::Open(&[
+        (0.6, 1.0),
+        (0.6, -0.4),
+        (0.595, -0.445),
+        (0.58, -0.487),
+        (0.556, -0.525),
+        (0.525, -0.556),
+        (0.487, -0.58),
+        (0.445, -0.595),
+        (0.4, -0.6),
+        (-1.0, -0.6),
+    ]),
+];
+const RESIZE: &[Glyph] = &[
+    Glyph::Open(&[(-0.1, 0.7), (-0.7, 0.7), (-0.7, 0.1)]),
+    Glyph::Open(&[(0.1, -0.7), (0.7, -0.7), (0.7, -0.1)]),
+    Glyph::Open(&[(0.7, -0.7), (-0.7, 0.7)]),
+];
+const ROTATE: &[Glyph] = &[
+    Glyph::Open(&[
+        (0.8, -0.3),
+        (0.8, -0.5),
+        (0.795, -0.545),
+        (0.78, -0.587),
+        (0.756, -0.625),
+        (0.725, -0.656),
+        (0.687, -0.68),
+        (0.645, -0.695),
+        (0.6, -0.7),
+        (0.0, -0.7),
+    ]),
+    Glyph::Open(&[(0.3, -1.0), (0.0, -0.7), (0.3, -0.4)]),
+    Glyph::Open(&[
+        (0.8, 0.1),
+        (0.8, 0.6),
+        (0.795, 0.645),
+        (0.78, 0.687),
+        (0.756, 0.725),
+        (0.725, 0.756),
+        (0.687, 0.78),
+        (0.645, 0.795),
+        (0.6, 0.8),
+        (-0.6, 0.8),
+        (-0.645, 0.795),
+        (-0.687, 0.78),
+        (-0.725, 0.756),
+        (-0.756, 0.725),
+        (-0.78, 0.687),
+        (-0.795, 0.645),
+        (-0.8, 0.6),
+        (-0.8, -0.5),
+        (-0.795, -0.545),
+        (-0.78, -0.587),
+        (-0.756, -0.625),
+        (-0.725, -0.656),
+        (-0.687, -0.68),
+        (-0.645, -0.695),
+        (-0.6, -0.7),
+        (-0.4, -0.7),
+    ]),
+];
+const RESET: &[Glyph] = &[
+    Glyph::Open(&[
+        (-0.9, 0.0),
+        (-0.872, 0.221),
+        (-0.792, 0.428),
+        (-0.662, 0.61),
+        (-0.492, 0.753),
+        (-0.292, 0.851),
+        (-0.074, 0.897),
+        (0.148, 0.888),
+        (0.362, 0.824),
+        (0.553, 0.71),
+        (0.71, 0.553),
+        (0.824, 0.362),
+        (0.888, 0.148),
+        (0.897, -0.074),
+        (0.851, -0.292),
+        (0.753, -0.492),
+        (0.61, -0.662),
+        (0.428, -0.792),
+        (0.221, -0.872),
+        (0.0, -0.9),
+        (-0.246, -0.868),
+        (-0.475, -0.774),
+        (-0.674, -0.626),
+        (-0.9, -0.4),
+    ]),
+    Glyph::Open(&[(-0.9, -0.9), (-0.9, -0.4), (-0.4, -0.4)]),
+];
+const FLIP: &[Glyph] = &[
+    Glyph::Open(&[(0.0, 0.2), (0.0, 0.4)]),
+    Glyph::Open(&[(0.0, 0.8), (0.0, 1.0)]),
+    Glyph::Open(&[(0.0, -1.0), (0.0, -0.8)]),
+    Glyph::Open(&[(0.0, -0.4), (0.0, -0.2)]),
+    Glyph::Closed(&[
+        (0.829, 0.47),
+        (0.847, 0.485),
+        (0.869, 0.495),
+        (0.892, 0.5),
+        (0.915, 0.499),
+        (0.938, 0.493),
+        (0.959, 0.481),
+        (0.976, 0.465),
+        (0.989, 0.446),
+        (0.997, 0.423),
+        (1.0, 0.4),
+        (1.0, -0.4),
+        (0.997, -0.423),
+        (0.989, -0.446),
+        (0.976, -0.465),
+        (0.959, -0.481),
+        (0.938, -0.493),
+        (0.915, -0.499),
+        (0.892, -0.5),
+        (0.869, -0.495),
+        (0.847, -0.485),
+        (0.829, -0.47),
+        (0.43, -0.071),
+        (0.416, -0.054),
+        (0.406, -0.033),
+        (0.401, -0.011),
+        (0.401, 0.011),
+        (0.406, 0.033),
+        (0.416, 0.054),
+        (0.43, 0.071),
+    ]),
+    Glyph::Closed(&[
+        (-0.829, 0.47),
+        (-0.847, 0.485),
+        (-0.869, 0.495),
+        (-0.892, 0.5),
+        (-0.915, 0.499),
+        (-0.938, 0.493),
+        (-0.959, 0.481),
+        (-0.976, 0.465),
+        (-0.989, 0.446),
+        (-0.997, 0.423),
+        (-1.0, 0.4),
+        (-1.0, -0.4),
+        (-0.997, -0.423),
+        (-0.989, -0.446),
+        (-0.976, -0.465),
+        (-0.959, -0.481),
+        (-0.938, -0.493),
+        (-0.915, -0.499),
+        (-0.892, -0.5),
+        (-0.869, -0.495),
+        (-0.847, -0.485),
+        (-0.829, -0.47),
+        (-0.43, -0.071),
+        (-0.416, -0.054),
+        (-0.406, -0.033),
+        (-0.401, -0.011),
+        (-0.401, 0.011),
+        (-0.406, 0.033),
+        (-0.416, 0.054),
+        (-0.43, 0.071),
+    ]),
+];
+const OPACITY: &[Glyph] = &[
+    Glyph::Circle((0.3, -0.3), 0.7),
+    Glyph::Circle((-0.3, 0.3), 0.7),
+];
+const LINK: &[Glyph] = &[
+    Glyph::Open(&[
+        (-0.2, 0.1),
+        (-0.115, 0.188),
+        (-0.012, 0.253),
+        (0.104, 0.291),
+        (0.226, 0.3),
+        (0.346, 0.279),
+        (0.458, 0.229),
+        (0.554, 0.154),
+        (0.854, -0.146),
+        (0.931, -0.25),
+        (0.979, -0.37),
+        (0.994, -0.498),
+        (0.977, -0.626),
+        (0.927, -0.745),
+        (0.848, -0.847),
+        (0.746, -0.926),
+        (0.627, -0.976),
+        (0.499, -0.993),
+        (0.371, -0.978),
+        (0.251, -0.93),
+        (0.147, -0.853),
+        (-0.025, -0.682),
+    ]),
+    Glyph::Open(&[
+        (0.2, -0.1),
+        (0.115, -0.188),
+        (0.012, -0.253),
+        (-0.104, -0.291),
+        (-0.226, -0.3),
+        (-0.346, -0.279),
+        (-0.458, -0.229),
+        (-0.554, -0.154),
+        (-0.854, 0.146),
+        (-0.931, 0.25),
+        (-0.979, 0.37),
+        (-0.994, 0.498),
+        (-0.977, 0.626),
+        (-0.927, 0.745),
+        (-0.848, 0.847),
+        (-0.746, 0.926),
+        (-0.627, 0.976),
+        (-0.499, 0.993),
+        (-0.371, 0.978),
+        (-0.251, 0.93),
+        (-0.147, 0.853),
+        (0.024, 0.682),
+    ]),
+];
+const COPY: &[Glyph] = &[
+    Glyph::Closed(&[
+        (-0.2, -0.4),
+        (0.8, -0.4),
+        (0.845, -0.395),
+        (0.887, -0.38),
+        (0.925, -0.356),
+        (0.956, -0.325),
+        (0.98, -0.287),
+        (0.995, -0.245),
+        (1.0, -0.2),
+        (1.0, 0.8),
+        (0.995, 0.845),
+        (0.98, 0.887),
+        (0.956, 0.925),
+        (0.925, 0.956),
+        (0.887, 0.98),
+        (0.845, 0.995),
+        (0.8, 1.0),
+        (-0.2, 1.0),
+        (-0.245, 0.995),
+        (-0.287, 0.98),
+        (-0.325, 0.956),
+        (-0.356, 0.925),
+        (-0.38, 0.887),
+        (-0.395, 0.845),
+        (-0.4, 0.8),
+        (-0.4, -0.2),
+        (-0.395, -0.245),
+        (-0.38, -0.287),
+        (-0.356, -0.325),
+        (-0.325, -0.356),
+        (-0.287, -0.38),
+        (-0.245, -0.395),
+    ]),
+    Glyph::Open(&[
+        (-0.8, 0.4),
+        (-0.853, 0.393),
+        (-0.901, 0.373),
+        (-0.941, 0.341),
+        (-0.973, 0.301),
+        (-0.993, 0.253),
+        (-1.0, 0.2),
+        (-1.0, -0.8),
+        (-0.993, -0.853),
+        (-0.973, -0.901),
+        (-0.941, -0.941),
+        (-0.901, -0.973),
+        (-0.853, -0.993),
+        (-0.8, -1.0),
+        (0.2, -1.0),
+        (0.253, -0.993),
+        (0.301, -0.973),
+        (0.341, -0.941),
+        (0.373, -0.901),
+        (0.393, -0.853),
+        (0.4, -0.8),
+    ]),
+];
 
 #[derive(Clone, Copy)]
 pub enum Icon {
@@ -61,11 +493,9 @@ pub fn paint(painter: &Painter, center: Pos2, reach: f32, icon: Icon, color: Col
             sketch.line(&[(-1.0, -1.0), (1.0, 1.0)]);
             sketch.line(&[(-1.0, 1.0), (1.0, -1.0)]);
         }
-        Icon::Minimize => Sketch {
-            stroke: Stroke::new(HEAVY_STROKE_WIDTH, color),
-            ..sketch
-        }
-        .line(&[(-1.0, 0.78), (1.0, 0.78)]),
+        Icon::Minimize => sketch
+            .widened(HEAVY_STROKE_WIDTH)
+            .line(&[(-1.0, 0.78), (1.0, 0.78)]),
         Icon::Maximize => sketch.rect((-1.0, -1.0), (1.0, 1.0)),
         Icon::Restore => {
             sketch.rect((-1.0, -0.45), (0.45, 1.0));
@@ -78,57 +508,26 @@ pub fn paint(painter: &Painter, center: Pos2, reach: f32, icon: Icon, color: Col
             ]);
         }
         Icon::Pin { pinned } => {
-            sketch.line(&[(-1.0, 1.0), PIN_HEAD]);
-            sketch.circle(PIN_HEAD, PIN_HEAD_RADIUS, pinned);
+            let share = if pinned {
+                PINNED_STROKE_SHARE
+            } else {
+                GLYPH_STROKE_SHARE
+            };
+            sketch.glyphs(PIN, share);
         }
-        Icon::Resize => {
-            sketch.rect((-1.0, -0.1), (0.1, 1.0));
-            sketch.arrow((-0.1, 0.1), (1.0, -1.0));
-        }
-        Icon::Crop => {
-            sketch.line(&[(-0.45, -1.0), (-0.45, 0.45), (1.0, 0.45)]);
-            sketch.line(&[(-1.0, -0.45), (0.45, -0.45), (0.45, 1.0)]);
-        }
-        Icon::Rotate => sketch.rotation_arrow(ROTATE_ARC_START),
-        Icon::Reset => sketch.rotation_arrow(RESET_ARC_START),
-        Icon::Link => sketch.chain_links(),
-        Icon::Copy => {
-            sketch.rect((-1.0, -0.35), (0.35, 1.0));
-            sketch.line(&[
-                (-0.35, -0.35),
-                (-0.35, -1.0),
-                (1.0, -1.0),
-                (1.0, 0.35),
-                (0.35, 0.35),
-            ]);
-        }
-        Icon::Flip => {
-            sketch.line(&[(0.0, -1.0), (0.0, 1.0)]);
-            sketch.arrow((-0.2, 0.0), (-1.0, 0.0));
-            sketch.arrow((0.2, 0.0), (1.0, 0.0));
-        }
-        Icon::ColorPicker => {
-            sketch.line(&[(-1.0, 1.0), (0.1, -0.1)]);
-            sketch.line(&[(-0.15, -0.5), (0.5, 0.15)]);
-            sketch.circle(DROPPER_BULB, DROPPER_BULB_RADIUS, true);
-        }
+        Icon::Resize => sketch.glyphs(RESIZE, GLYPH_STROKE_SHARE),
+        Icon::Crop => sketch.glyphs(CROP, GLYPH_STROKE_SHARE),
+        Icon::Rotate => sketch.glyphs(ROTATE, GLYPH_STROKE_SHARE),
+        Icon::Reset => sketch.glyphs(RESET, GLYPH_STROKE_SHARE),
+        Icon::Link => sketch.glyphs(LINK, GLYPH_STROKE_SHARE),
+        Icon::Copy => sketch.glyphs(COPY, GLYPH_STROKE_SHARE),
+        Icon::Flip => sketch.glyphs(FLIP, GLYPH_STROKE_SHARE),
+        Icon::ColorPicker => sketch.glyphs(PIPETTE, GLYPH_STROKE_SHARE),
+        Icon::Opacity => sketch.glyphs(OPACITY, GLYPH_STROKE_SHARE),
         Icon::Info => {
             sketch.circle((0.0, 0.0), 1.0, false);
             sketch.circle((0.0, -0.5), 0.11, true);
             sketch.line(&[(0.0, -0.1), (0.0, 0.55)]);
-        }
-        Icon::Opacity => {
-            sketch.circle((0.0, 0.0), 1.0, false);
-            let half: Vec<Unit> = (0..=HALF_DISC_STEPS)
-                .map(|step| {
-                    let angle = FRAC_PI_2 + PI * step as f32 / HALF_DISC_STEPS as f32;
-                    (
-                        HALF_DISC_RADIUS * angle.cos(),
-                        HALF_DISC_RADIUS * angle.sin(),
-                    )
-                })
-                .collect();
-            sketch.polygon(&half);
         }
         Icon::Play => sketch.polygon(&[(-0.6, -1.0), (-0.6, 1.0), (0.95, 0.0)]),
         Icon::Pause => {
@@ -161,6 +560,13 @@ struct Sketch<'a> {
 }
 
 impl Sketch<'_> {
+    fn widened(self, width: f32) -> Self {
+        Self {
+            stroke: Stroke::new(width, self.color),
+            ..self
+        }
+    }
+
     fn point(&self, (x, y): Unit) -> Pos2 {
         self.center + Vec2::new(x, y) * self.reach
     }
@@ -194,73 +600,34 @@ impl Sketch<'_> {
         }
     }
 
-    fn arrow(&self, from: Unit, to: Unit) {
-        let (dx, dy) = (to.0 - from.0, to.1 - from.1);
-        let length = dx.hypot(dy);
-        self.line(&[from, to]);
-        self.arrow_head(to, (dx / length, dy / length));
-    }
-
-    fn arrow_head(&self, tip: Unit, heading: Unit) {
-        let barb = |angle: f32| {
-            let (sin, cos) = angle.sin_cos();
-            (
-                tip.0 + ARROW_LENGTH * (heading.1 * sin - heading.0 * cos),
-                tip.1 - ARROW_LENGTH * (heading.0 * sin + heading.1 * cos),
-            )
-        };
-        self.line(&[barb(ARROW_SPREAD), tip, barb(-ARROW_SPREAD)]);
-    }
-
     fn polygon(&self, points: &[Unit]) {
         let points = points.iter().map(|&unit| self.point(unit)).collect();
         self.painter
             .add(Shape::convex_polygon(points, self.color, Stroke::NONE));
     }
 
-    fn closed_line(&self, points: &[Unit]) {
-        let points = points.iter().map(|&unit| self.point(unit)).collect();
-        self.painter.add(Shape::closed_line(points, self.stroke));
-    }
-
-    fn chain_links(&self) {
-        for side in [-1.0, 1.0] {
-            self.capsule(side * LINK_SLIDE);
+    fn glyphs(&self, glyphs: &[Glyph], share: f32) {
+        let width = (self.reach * share).max(MIN_GLYPH_STROKE);
+        let pen = self.widened(width);
+        for glyph in glyphs {
+            match glyph {
+                Glyph::Open(points) => pen.open(points),
+                Glyph::Closed(points) => pen.closed(points),
+                Glyph::Circle(center, radius) => pen.circle(*center, *radius, false),
+            }
         }
     }
 
-    fn capsule(&self, slide: f32) {
-        let outline: Vec<Unit> = [1.0, -1.0]
-            .into_iter()
-            .flat_map(|sign| {
-                (0..=LINK_CAP_STEPS).map(move |step| {
-                    let angle = -FRAC_PI_2 + PI * step as f32 / LINK_CAP_STEPS as f32;
-                    let (sin, cos) = angle.sin_cos();
-                    (
-                        sign * (LINK_HALF_LENGTH + LINK_RADIUS * cos),
-                        sign * LINK_RADIUS * sin,
-                    )
-                })
-            })
-            .map(|(along, across)| {
-                (
-                    (slide + along + across) * FRAC_1_SQRT_2,
-                    (across - slide - along) * FRAC_1_SQRT_2,
-                )
-            })
-            .collect();
-        self.closed_line(&outline);
+    fn open(&self, points: &[Unit]) {
+        self.line(points);
+        for end in [points.first(), points.last()].into_iter().flatten() {
+            self.painter
+                .circle_filled(self.point(*end), self.stroke.width / 2.0, self.color);
+        }
     }
 
-    fn rotation_arrow(&self, start: f32) {
-        let angle_at = |step: usize| start + ARC_SWEEP * step as f32 / ARC_STEPS as f32;
-        let on_arc = |angle: f32| {
-            let (sin, cos) = angle.sin_cos();
-            (cos * ARC_RADIUS, sin * ARC_RADIUS)
-        };
-        let arc: Vec<Unit> = (0..=ARC_STEPS).map(|step| on_arc(angle_at(step))).collect();
-        self.line(&arc);
-        let (sin, cos) = angle_at(ARC_STEPS).sin_cos();
-        self.arrow_head(on_arc(angle_at(ARC_STEPS)), (sin, -cos));
+    fn closed(&self, points: &[Unit]) {
+        let points = points.iter().map(|&unit| self.point(unit)).collect();
+        self.painter.add(Shape::closed_line(points, self.stroke));
     }
 }

@@ -11,11 +11,13 @@ use crate::app::settings_entries::{Control, ENTRIES, Entry, Variant};
 use crate::app::theme;
 use crate::core::rgba::Rgba;
 
-const CONTROL_WIDTH: f32 = 180.0;
+const CONTROL_MAX_WIDTH: f32 = 180.0;
+const CONTROL_MIN_WIDTH: f32 = 140.0;
+const CONTROL_SHARE: f32 = 0.4;
 const ROW_MIN_HEIGHT: f32 = 36.0;
 const ROW_PADDING: f32 = 5.0;
 const ROW_INSET: f32 = 10.0;
-const COLUMN_GAP: f32 = 16.0;
+const COLUMN_GAP: f32 = 12.0;
 const LINE_GAP: f32 = 1.0;
 const TOGGLE_SIZE: Vec2 = vec2(32.0, 16.0);
 const TOGGLE_KNOB_INSET: f32 = 3.0;
@@ -78,7 +80,8 @@ fn row(
     editor: &mut ColorEditor,
 ) -> bool {
     let width = ui.available_width();
-    let text_width = (width - CONTROL_WIDTH - COLUMN_GAP - 2.0 * ROW_INSET).max(0.0);
+    let control_width = (width * CONTROL_SHARE).clamp(CONTROL_MIN_WIDTH, CONTROL_MAX_WIDTH);
+    let text_width = (width - control_width - COLUMN_GAP - 2.0 * ROW_INSET).max(0.0);
     let painter = ui.painter();
     let label = painter.layout_no_wrap(
         entry.label.to_owned(),
@@ -113,7 +116,7 @@ fn row(
         theme::text_dim(),
     );
     let cell = Rect::from_min_max(
-        Pos2::new(rect.right() - ROW_INSET - CONTROL_WIDTH, rect.top()),
+        Pos2::new(rect.right() - ROW_INSET - control_width, rect.top()),
         Pos2::new(rect.right() - ROW_INSET, rect.bottom()),
     );
     let mut cell = ui.new_child(
@@ -122,14 +125,20 @@ fn row(
             .layout(Layout::right_to_left(Align::Center)),
     );
     let before = control.clone();
-    show_control(&mut cell, index, control, editor);
+    show_control(&mut cell, index, control, control_width, editor);
     *control != before
 }
 
-fn show_control(ui: &mut Ui, index: usize, control: &mut Control, editor: &mut ColorEditor) {
+fn show_control(
+    ui: &mut Ui,
+    index: usize,
+    control: &mut Control,
+    width: f32,
+    editor: &mut ColorEditor,
+) {
     match control {
         Control::Toggle(on) => toggle(ui, on),
-        Control::Choice { options, selected } => choice(ui, index, options, selected),
+        Control::Choice { options, selected } => choice(ui, index, width, options, selected),
         Control::Number {
             value,
             min,
@@ -142,10 +151,11 @@ fn show_control(ui: &mut Ui, index: usize, control: &mut Control, editor: &mut C
     }
 }
 
-fn choice(ui: &mut Ui, index: usize, options: &[Variant], selected: &mut usize) {
+fn choice(ui: &mut Ui, index: usize, width: f32, options: &[Variant], selected: &mut usize) {
     let current = options.get(*selected).map_or("", |variant| variant.label);
     ComboBox::from_id_salt(("setting", index))
-        .width(CONTROL_WIDTH)
+        .width(width)
+        .truncate()
         .selected_text(current)
         .popup_style(theme::field_style.into())
         .show_ui(ui, |ui| {
