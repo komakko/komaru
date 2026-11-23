@@ -93,6 +93,11 @@ jobs:
         shell: pwsh
         run: |
           git clone --depth 1 --branch $env:DAV1D_VERSION https://github.com/videolan/dav1d dav1d-src
+          $header = "dav1d-src\include\compat\msvc\stdatomic.h"
+          $original = Get-Content $header -Raw
+          $patched = $original.Replace('defined(__clang__) && __has_include_next(<stdatomic.h>)', 'defined(__clang__)')
+          if ($patched -eq $original) { throw "stdatomic.h patch did not apply" }
+          Set-Content -Path $header -Value $patched -NoNewline
           meson setup dav1d-build dav1d-src --prefix=C:\dav1d --libdir=lib -Dbuildtype=release -Db_vscrt=mt -Ddefault_library=static -Denable_tools=false -Denable_tests=false
           ninja -C dav1d-build install
 
